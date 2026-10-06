@@ -28,14 +28,18 @@ def get_annual_facts(company_data, concept):
     annual_facts = []
 
     for item in fact["units"]["USD"]:
-        start = datetime.strptime(item["start"], "%Y-%m-%d")
-        end = datetime.strptime(item["end"], "%Y-%m-%d")
-
-        days = (end - start).days
         end_year = int(item["end"][:4])
 
-        if item["form"] == "10-K" and item["fy"] == end_year and days > 300:
-            annual_facts.append(item)
+        if item["form"] == "10-K" and item["fy"] == end_year:
+            if "start" in item:
+                start = datetime.strptime(item["start"], "%Y-%m-%d")
+                end = datetime.strptime(item["end"], "%Y-%m-%d")
+                days = (end - start).days
+
+                if days > 300:
+                    annual_facts.append(item)
+            else:
+                annual_facts.append(item)
 
     return annual_facts
 msft_data = get_company_facts("0000789019")
@@ -67,6 +71,18 @@ annual_capex = get_annual_facts(
     msft_data,
     "PaymentsToAcquirePropertyPlantAndEquipment"
 )
+annual_cash = get_annual_facts(
+    msft_data,
+    "CashAndCashEquivalentsAtCarryingValue"
+)
+cash_by_year = {}
+
+for item in annual_cash:
+    cash_by_year[item["fy"]] = item
+print("Annual Cash Records")
+
+for item in annual_cash:
+    print(item["fy"], item["end"], item["val"])
 
 print("Revenue Growth")
 
@@ -145,3 +161,11 @@ for i in range(1, len(annual_fcf)):
     growth = (annual_fcf[i] / annual_fcf[i - 1]) - 1
     year = annual_revenue[i]["fy"]
     print(year, f"{growth:.2%}")
+print("\nCash and Cash Equivalents ($ billions)")
+
+for item in annual_revenue:
+    year = item["fy"]
+
+    if year in cash_by_year:
+        cash = cash_by_year[year]["val"]
+        print(year, f"{cash / 1_000_000_000:.2f}")
