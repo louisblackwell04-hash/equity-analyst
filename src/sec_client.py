@@ -131,3 +131,17 @@ for revenue_item in annual_revenue:
     free_cash_flow = operating_cash_flow_item["val"] - capex_item["val"]
     fcf_margin = free_cash_flow / revenue_item["val"]
     print(year, f"{fcf_margin:.2%}")
+print("\nFCF Growth")
+annual_fcf = []
+
+for revenue_item in annual_revenue:
+    year = revenue_item["fy"]
+    operating_cash_flow_item = operating_cash_flow_by_year[year]
+    capex_item = capex_by_year[year]
+    free_cash_flow = operating_cash_flow_item["val"] - capex_item["val"]
+    annual_fcf.append(free_cash_flow)
+
+for i in range(1, len(annual_fcf)):
+    growth = (annual_fcf[i] / annual_fcf[i - 1]) - 1
+    year = annual_revenue[i]["fy"]
+    print(year, f"{growth:.2%}")
