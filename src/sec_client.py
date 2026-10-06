@@ -49,7 +49,12 @@ annual_net_income = get_annual_facts(
     msft_data,
     "NetIncomeLoss"
 )
+annual_operating_income = get_annual_facts(
+    msft_data,
+    "OperatingIncomeLoss"
+)
 print("Revenue Growth")
+
 for i in range(1, len(annual_revenue)):
     current = annual_revenue[i]
     previous = annual_revenue[i - 1]
@@ -61,10 +66,22 @@ net_income_by_year = {}
 
 for item in annual_net_income:
     net_income_by_year[item["fy"]] = item
+operating_income_by_year = {}
+for item in annual_operating_income:
+    operating_income_by_year[item["fy"]] = item
 print("\nNet Margin")
 for revenue_item in annual_revenue:
     year = revenue_item["fy"]
     net_income_item = net_income_by_year[year]
+    operating_income_item = operating_income_by_year[year]
     net_margin = net_income_item["val"] / revenue_item["val"]
+    operating_margin = operating_income_item["val"] / revenue_item["val"]
 
     print(year, f"{net_margin:.2%}")
+print("\nOperating Margin")
+for revenue_item in annual_revenue:
+    year = revenue_item["fy"]
+    operating_income_item = operating_income_by_year[year]
+    operating_margin = operating_income_item["val"] / revenue_item["val"]
+
+    print(year, f"{operating_margin:.2%}")
