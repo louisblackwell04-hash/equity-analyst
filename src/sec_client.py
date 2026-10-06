@@ -212,3 +212,55 @@ for year in sorted(debt_by_year):
             print(year, f"{total / 1_000_000_000:.2f}")
         else:
             print(year, "Unavailable")
+print("\nNet Debt — Excluding Leases ($ billions)")
+
+for year in sorted(debt_by_year):
+    if year >= 2018:
+        if (
+            year in current_debt_by_year
+            and year in commercial_paper_by_year
+            and year in cash_by_year
+        ):
+            total_debt = (
+                debt_by_year[year]["val"]
+                + current_debt_by_year[year]["val"]
+                + commercial_paper_by_year[year]["val"]
+            )
+            net_debt = total_debt - cash_by_year[year]["val"]
+            print(year, f"{net_debt / 1_000_000_000:.2f}")
+        else:
+            print(year, "Unavailable")
+equity_by_year = get_year_end_balances(
+    msft_data,
+    "StockholdersEquity"
+)
+
+print("\nShareholders' Equity ($ billions)")
+
+for year in sorted(equity_by_year):
+    if year >= 2018:
+        value = equity_by_year[year]["val"]
+        print(year, f"{value / 1_000_000_000:.2f}")
+print("\nDebt-to-Equity — Excluding Leases")
+
+for year in sorted(equity_by_year):
+    if year >= 2018:
+        if (
+            year in debt_by_year
+            and year in current_debt_by_year
+            and year in commercial_paper_by_year
+        ):
+            total_debt = (
+                debt_by_year[year]["val"]
+                + current_debt_by_year[year]["val"]
+                + commercial_paper_by_year[year]["val"]
+            )
+            equity = equity_by_year[year]["val"]
+
+            if equity > 0:
+                ratio = total_debt / equity
+                print(year, f"{ratio:.2f}x")
+            else:
+                print(year, "Not meaningful: equity is zero or negative")
+        else:
+            print(year, "Unavailable")       
