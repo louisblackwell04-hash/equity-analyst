@@ -59,6 +59,15 @@ annual_gross_profit = get_annual_facts(
     "GrossProfit"
 )
 
+annual_operating_cash_flow = get_annual_facts(
+    msft_data,
+    "NetCashProvidedByUsedInOperatingActivities"
+)
+annual_capex = get_annual_facts(
+    msft_data,
+    "PaymentsToAcquirePropertyPlantAndEquipment"
+)
+
 print("Revenue Growth")
 
 for i in range(1, len(annual_revenue)):
@@ -79,12 +88,19 @@ for item in annual_operating_income:
 
 for item in annual_gross_profit:
     gross_profit_by_year[item["fy"]] = item
+operating_cash_flow_by_year = {}
+
+for item in annual_operating_cash_flow:
+    operating_cash_flow_by_year[item["fy"]] = item
+capex_by_year = {}
+
+for item in annual_capex:
+    capex_by_year[item["fy"]] = item
 print("\nNet Margin")
 for revenue_item in annual_revenue:
     year = revenue_item["fy"]
     net_income_item = net_income_by_year[year]
     net_margin = net_income_item["val"] / revenue_item["val"]
-
     print(year, f"{net_margin:.2%}")
 print("\nOperating Margin")
 for revenue_item in annual_revenue:
@@ -100,3 +116,10 @@ for revenue_item in annual_revenue:
     gross_margin = gross_profit_item["val"] / revenue_item["val"]
 
     print(year, f"{gross_margin:.2%}")
+print("\nFree Cash Flow")
+for revenue_item in annual_revenue:
+    year = revenue_item["fy"]
+    operating_cash_flow_item = operating_cash_flow_by_year[year]
+    capex_item = capex_by_year[year]
+    free_cash_flow = operating_cash_flow_item["val"] - capex_item["val"]
+    print(year, f"{free_cash_flow / 1_000_000_000:.2f}")
