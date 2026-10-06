@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
+import csv
 
 
 load_dotenv()
@@ -376,4 +377,54 @@ for year in sorted(current_assets_by_year):
             print(year, f"{working_capital / 1_000_000_000:.2f}")
         else:
             print(year, "Unavailable")
-            
+os.makedirs("output", exist_ok=True)
+
+with open("output/financial_summary.csv", "w", newline="") as file:
+    writer = csv.writer(file)
+
+    writer.writerow([
+        "Year",
+        "Cash ($ billions)",
+        "Debt excluding leases ($ billions)",
+        "Net debt excluding leases ($ billions)",
+        "Shareholders' equity ($ billions)"
+    ])
+
+    for year in sorted(cash_by_year):
+        if year >= 2018:
+            cash = cash_by_year[year]["val"]
+
+            equity = equity_by_year.get(year)
+            equity_value = (
+                f'{equity["val"] / 1_000_000_000:.2f}'
+                if equity is not None else ""
+            )
+
+            if (
+                year in debt_by_year
+                and year in current_debt_by_year
+                and year in commercial_paper_by_year
+            ):
+                debt = (
+                    debt_by_year[year]["val"]
+                    + current_debt_by_year[year]["val"]
+                    + commercial_paper_by_year[year]["val"]
+                )
+
+                writer.writerow([
+                    year,
+                    f"{cash / 1_000_000_000:.2f}",
+                    f"{debt / 1_000_000_000:.2f}",
+                    f"{(debt - cash) / 1_000_000_000:.2f}",
+                    equity_value
+                ])
+            else:
+                writer.writerow([
+                    year,
+                    f"{cash / 1_000_000_000:.2f}",
+                    "",
+                    "",
+                    equity_value
+                ])
+
+print("\nSaved: output/financial_summary.csv")
