@@ -123,3 +123,11 @@ for revenue_item in annual_revenue:
     capex_item = capex_by_year[year]
     free_cash_flow = operating_cash_flow_item["val"] - capex_item["val"]
     print(year, f"{free_cash_flow / 1_000_000_000:.2f}")
+print("\nFCF Margin")
+for revenue_item in annual_revenue:
+    year = revenue_item["fy"]
+    operating_cash_flow_item = operating_cash_flow_by_year[year]
+    capex_item = capex_by_year[year]
+    free_cash_flow = operating_cash_flow_item["val"] - capex_item["val"]
+    fcf_margin = free_cash_flow / revenue_item["val"]
+    print(year, f"{fcf_margin:.2%}")
