@@ -346,3 +346,21 @@ for year in sorted(current_liabilities_by_year):
                 print(year, "Not meaningful: liabilities are zero or negative")
         else:
             print(year, "Unavailable")       
+print("\nCash Ratio — Including Short-Term Investments")
+
+for year in sorted(current_liabilities_by_year):
+    if year >= 2018:
+        if year in cash_by_year and year in short_term_investments_by_year:
+            liquid_funds = (
+                cash_by_year[year]["val"]
+                + short_term_investments_by_year[year]["val"]
+            )
+            liabilities = current_liabilities_by_year[year]["val"]
+
+            if liabilities > 0:
+                ratio = liquid_funds / liabilities
+                print(year, f"{ratio:.2f}x")
+            else:
+                print(year, "Not meaningful: liabilities are zero or negative")
+        else:
+            print(year, "Unavailable")
