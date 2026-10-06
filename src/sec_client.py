@@ -364,3 +364,16 @@ for year in sorted(current_liabilities_by_year):
                 print(year, "Not meaningful: liabilities are zero or negative")
         else:
             print(year, "Unavailable")
+print("\nWorking Capital ($ billions)")
+
+for year in sorted(current_assets_by_year):
+    if year >= 2018:
+        if year in current_liabilities_by_year:
+            working_capital = (
+                current_assets_by_year[year]["val"]
+                - current_liabilities_by_year[year]["val"]
+            )
+            print(year, f"{working_capital / 1_000_000_000:.2f}")
+        else:
+            print(year, "Unavailable")
+            
