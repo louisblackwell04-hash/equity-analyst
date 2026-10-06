@@ -264,3 +264,40 @@ for year in sorted(equity_by_year):
                 print(year, "Not meaningful: equity is zero or negative")
         else:
             print(year, "Unavailable")       
+current_assets_by_year = get_year_end_balances(
+    msft_data,
+    "AssetsCurrent"
+)
+
+print("\nCurrent Assets ($ billions)")
+
+for year in sorted(current_assets_by_year):
+    if year >= 2018:
+        value = current_assets_by_year[year]["val"]
+        print(year, f"{value / 1_000_000_000:.2f}")
+current_liabilities_by_year = get_year_end_balances(
+    msft_data,
+    "LiabilitiesCurrent"
+)
+
+print("\nCurrent Liabilities ($ billions)")
+
+for year in sorted(current_liabilities_by_year):
+    if year >= 2018:
+        value = current_liabilities_by_year[year]["val"]
+        print(year, f"{value / 1_000_000_000:.2f}")
+print("\nCurrent Ratio")
+
+for year in sorted(current_assets_by_year):
+    if year >= 2018:
+        if year in current_liabilities_by_year:
+            assets = current_assets_by_year[year]["val"]
+            liabilities = current_liabilities_by_year[year]["val"]
+
+            if liabilities > 0:
+                ratio = assets / liabilities
+                print(year, f"{ratio:.2f}x")
+            else:
+                print(year, "Not meaningful: liabilities are zero or negative")
+        else:
+            print(year, "Unavailable")
