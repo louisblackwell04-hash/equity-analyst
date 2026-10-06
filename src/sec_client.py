@@ -44,6 +44,12 @@ annual_revenue = get_annual_facts(
     msft_data,
     "RevenueFromContractWithCustomerExcludingAssessedTax"
 )
+
+annual_net_income = get_annual_facts(
+    msft_data,
+    "NetIncomeLoss"
+)
+print("Revenue Growth")
 for i in range(1, len(annual_revenue)):
     current = annual_revenue[i]
     previous = annual_revenue[i - 1]
@@ -51,5 +57,14 @@ for i in range(1, len(annual_revenue)):
     growth = (current["val"] / previous["val"]) - 1
 
     print(current["fy"], f"{growth:.2%}")
+net_income_by_year = {}
 
+for item in annual_net_income:
+    net_income_by_year[item["fy"]] = item
+print("\nNet Margin")
+for revenue_item in annual_revenue:
+    year = revenue_item["fy"]
+    net_income_item = net_income_by_year[year]
+    net_margin = net_income_item["val"] / revenue_item["val"]
 
+    print(year, f"{net_margin:.2%}")
