@@ -42,6 +42,24 @@ def get_annual_facts(company_data, concept):
                 annual_facts.append(item)
 
     return annual_facts
+def get_year_end_balances(company_data, concept):
+    records = company_data["facts"]["us-gaap"][concept]["units"]["USD"]
+    balances_by_year = {}
+
+    for item in records:
+        if item["form"] != "10-K" or "start" in item:
+            continue
+
+        if not item["end"].endswith("-06-30"):
+            continue
+
+        year = int(item["end"][:4])
+        previous = balances_by_year.get(year)
+
+        if previous is None or item["filed"] > previous["filed"]:
+            balances_by_year[year] = item
+
+    return balances_by_year
 msft_data = get_company_facts("0000789019")
 
 annual_revenue = get_annual_facts(
@@ -71,19 +89,10 @@ annual_capex = get_annual_facts(
     msft_data,
     "PaymentsToAcquirePropertyPlantAndEquipment"
 )
-annual_cash = get_annual_facts(
+cash_by_year = get_year_end_balances(
     msft_data,
     "CashAndCashEquivalentsAtCarryingValue"
 )
-cash_by_year = {}
-
-for item in annual_cash:
-    cash_by_year[item["fy"]] = item
-print("Annual Cash Records")
-
-for item in annual_cash:
-    print(item["fy"], item["end"], item["val"])
-
 print("Revenue Growth")
 
 for i in range(1, len(annual_revenue)):
@@ -98,9 +107,11 @@ net_income_by_year = {}
 for item in annual_net_income:
     net_income_by_year[item["fy"]] = item
 operating_income_by_year = {}
+
 for item in annual_operating_income:
     operating_income_by_year[item["fy"]] = item
-    gross_profit_by_year = {}
+
+gross_profit_by_year = {}
 
 for item in annual_gross_profit:
     gross_profit_by_year[item["fy"]] = item
@@ -169,3 +180,35 @@ for item in annual_revenue:
     if year in cash_by_year:
         cash = cash_by_year[year]["val"]
         print(year, f"{cash / 1_000_000_000:.2f}")
+debt_by_year = get_year_end_balances(
+    msft_data,
+    "LongTermDebtNoncurrent"
+)
+current_debt_by_year = get_year_end_balances(
+    msft_data,
+    "LongTermDebtCurrent"
+)
+records = msft_data["facts"]["us-gaap"]["CommercialPaper"]["units"]["USD"]
+commercial_paper_by_year = get_year_end_balances(
+    msft_data,
+    "CommercialPaper"
+)
+# Fill gaps checked against Microsoft's annual reports.
+commercial_paper_by_year[2020] = {"val": 0}
+commercial_paper_by_year[2021] = {"val": 0}
+commercial_paper_by_year[2022] = {"val": 0}
+# Manually reviewed against the 2026 balance sheet and debt note.
+commercial_paper_by_year[2026] = {"val": 0}
+print("\nLong-Term Debt + Commercial Paper ($ billions)")
+
+for year in sorted(debt_by_year):
+    if year >= 2018:
+        if year in current_debt_by_year and year in commercial_paper_by_year:
+            total = (
+                debt_by_year[year]["val"]
+                + current_debt_by_year[year]["val"]
+                + commercial_paper_by_year[year]["val"]
+            )
+            print(year, f"{total / 1_000_000_000:.2f}")
+        else:
+            print(year, "Unavailable")
