@@ -387,7 +387,8 @@ with open("output/financial_summary.csv", "w", newline="") as file:
         "Cash ($ billions)",
         "Debt excluding leases ($ billions)",
         "Net debt excluding leases ($ billions)",
-        "Shareholders' equity ($ billions)"
+        "Shareholders' equity ($ billions)",
+        "Debt-to-equity excluding leases"
     ])
 
     for year in sorted(cash_by_year):
@@ -411,12 +412,19 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     + commercial_paper_by_year[year]["val"]
                 )
 
+                debt_to_equity = (
+                    f'{debt / equity["val"]:.2f}'
+                    if equity is not None and equity["val"] > 0
+                    else ""
+                )
+
                 writer.writerow([
                     year,
                     f"{cash / 1_000_000_000:.2f}",
                     f"{debt / 1_000_000_000:.2f}",
                     f"{(debt - cash) / 1_000_000_000:.2f}",
-                    equity_value
+                                    equity_value,
+                    debt_to_equity
                 ])
             else:
                 writer.writerow([
@@ -424,7 +432,8 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     f"{cash / 1_000_000_000:.2f}",
                     "",
                     "",
-                    equity_value
+                    equity_value,
+                    ""
                 ])
 
 print("\nSaved: output/financial_summary.csv")
