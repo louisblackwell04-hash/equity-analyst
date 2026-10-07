@@ -388,7 +388,8 @@ with open("output/financial_summary.csv", "w", newline="") as file:
         "Debt excluding leases ($ billions)",
         "Net debt excluding leases ($ billions)",
         "Shareholders' equity ($ billions)",
-        "Debt-to-equity excluding leases"
+        "Debt-to-equity excluding leases",
+        "Current ratio"
     ])
 
     for year in sorted(cash_by_year):
@@ -400,7 +401,16 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                 f'{equity["val"] / 1_000_000_000:.2f}'
                 if equity is not None else ""
             )
+            assets = current_assets_by_year.get(year)
+            liabilities = current_liabilities_by_year.get(year)
 
+            current_ratio_value = (
+                f'{assets["val"] / liabilities["val"]:.2f}'
+                if assets is not None
+                and liabilities is not None
+                and liabilities["val"] > 0
+                else ""
+            )
             if (
                 year in debt_by_year
                 and year in current_debt_by_year
@@ -423,8 +433,9 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     f"{cash / 1_000_000_000:.2f}",
                     f"{debt / 1_000_000_000:.2f}",
                     f"{(debt - cash) / 1_000_000_000:.2f}",
-                                    equity_value,
-                    debt_to_equity
+                    equity_value,
+                    debt_to_equity,
+                    current_ratio_value
                 ])
             else:
                 writer.writerow([
@@ -433,7 +444,8 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     "",
                     "",
                     equity_value,
-                    ""
+                    "",
+                    current_ratio_value
                 ])
 
 print("\nSaved: output/financial_summary.csv")
