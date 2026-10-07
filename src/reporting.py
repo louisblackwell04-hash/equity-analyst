@@ -50,14 +50,32 @@ def format_value(value, kind, terminal=False):
     return f"{value:.2f}" + ("x" if terminal else "")
 
 
-def print_report(rows):
+def print_report(rows, ticker=None):
+    heading_overrides = {}
+
+    if ticker == "WMT":
+        heading_overrides = {
+            "total_debt": (
+                "Long-Term Debt + Short-Term Borrowings ($ billions)"
+            ),
+            "gross_margin": (
+                "Derived Gross Margin — Total Revenue Basis"
+            ),
+            "receivables": "Current Receivables ($ billions)",
+        }
+
     for key, heading, kind in TERMINAL_METRICS:
+        heading = heading_overrides.get(key, heading)
         print(f"\n{heading}")
+
         for index, row in enumerate(rows):
             if index == 0 and key.endswith("_growth") and row[key] is None:
                 continue
-            print(row["year"], format_value(row.get(key), kind, terminal=True))
 
+            print(
+                row["year"],
+                format_value(row.get(key), kind, terminal=True),
+            )
 
 def write_summary_csv(rows, path):
     path = Path(path)

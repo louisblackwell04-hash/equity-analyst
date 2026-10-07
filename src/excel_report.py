@@ -1,4 +1,6 @@
 """Generate the existing formatted workbook from the shared summary CSV."""
+import json
+from datetime import datetime
 import argparse
 import csv
 from pathlib import Path
@@ -19,6 +21,19 @@ def build_report(csv_path, excel_path):
 
     rows.sort(key=lambda row: int(row["Year"]))
     metrics = [column for column in rows[0] if column != "Year"]
+    metadata_path = csv_path.with_suffix(".metadata.json")
+
+    if not metadata_path.exists():
+        raise ValueError(
+            "Company metadata is missing. Run sec_client.py first."
+        )
+
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    company_name = metadata["company_name"]
+    ticker = metadata["ticker"]
+    period_ends = metadata["period_ends"]
+    latest_year = rows[-1]["Year"]
+    latest_period_end = period_ends[latest_year]
 
     with xlsxwriter.Workbook(excel_path) as workbook:
         overview = workbook.add_worksheet("Overview")
@@ -58,13 +73,13 @@ def build_report(csv_path, excel_path):
 
         sheet.merge_range(
             0, 0, 0, last_column,
-            "Microsoft Financial History",
+            f"{company_name} Financial History",
             title
         )
 
         sheet.merge_range(
             1, 0, 1, last_column,
-            "Fiscal years ending June 30. Dollar amounts in USD billions.",
+        "Actual fiscal periods. Dollar amounts in USD billions.",
             subtitle
         )
 
@@ -75,11 +90,28 @@ def build_report(csv_path, excel_path):
         sheet.set_column(1, last_column, 12)
         sheet.freeze_panes(4, 1)
 
+        period_format = workbook.add_format({
+            "font_size": 9,
+            "font_color": "#52657A",
+            "align": "center",
+            "num_format": "yyyy-mm-dd"
+        })
+
+        sheet.set_row(2, 22)
+        sheet.write(2, 0, "Fiscal period end", subtitle)
         sheet.write(3, 0, "Metric", header)
 
         for column, row in enumerate(rows, start=1):
-            sheet.write_number(3, column, int(row["Year"]), header)
+            period_end = datetime.strptime(
+                period_ends[row["Year"]], "%Y-%m-%d"
+            )
 
+            sheet.write_datetime(
+                2, column, period_end, period_format
+            )
+            sheet.write_number(
+                3, column, int(row["Year"]), header
+            )
         for index, metric in enumerate(metrics):
             row_number = index + 4
             background = "#F0F4F8" if index % 2 == 0 else "#FFFFFF"
@@ -118,10 +150,10 @@ def build_report(csv_path, excel_path):
 
         sheet.merge_range(
             note_row, 0, note_row + 1, last_column,
-            "Source: financial_summary.csv, generated from SEC company facts. "
-            "Debt excludes leases. Net debt subtracts cash and cash equivalents only. "
-            "Commercial-paper zeros for 2020–2022 and 2026 are manual entries "
-            "documented in the extraction code.",
+            "Source: SEC company facts and accompanying company metadata. "
+            "Debt excludes leases. Net debt subtracts cash and cash "
+            "equivalents only. "
+            + " ".join(metadata.get("notes", [])),
             note
         )
 
@@ -141,13 +173,13 @@ def build_report(csv_path, excel_path):
         overview.set_column("D:F", 14)
 
         overview.merge_range(
-            "B2:F3", "Microsoft Analyst Overview", title
+            "B2:F3", f"{company_name} Analyst Overview", title
         )
 
         latest = rows[-1]
         overview.merge_range(
             "B4:F4",
-            f'Fiscal year {latest["Year"]} ending June 30',
+        f"{ticker} — Fiscal year {latest_year} ended {latest_period_end}",
             subtitle
         )
 
@@ -254,6 +286,9 @@ def build_report(csv_path, excel_path):
         ]
 
         for metric, label, color in liquidity_metrics:
+            if all(record[metric] == "" for record in rows):
+                continue
+
             history_row = metrics.index(metric) + 4
 
             liquidity_chart.add_series({

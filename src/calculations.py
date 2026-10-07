@@ -33,24 +33,84 @@ def calculate_growth(current, previous):
 
 
 def calculate_year_metrics(inputs):
-    """Calculate each result once; None means an input/valid denominator is absent."""
     row = dict(inputs)
     get = inputs.get
-    row["total_debt"] = calculate_total_debt(get("long_term_debt"), get("current_debt"), get("commercial_paper"))
-    row["net_debt"] = calculate_net_debt(row["total_debt"], get("cash"))
-    row["debt_to_equity"] = calculate_ratio(row["total_debt"], get("equity"))
-    row["fcf"] = subtract_if_complete(get("operating_cash_flow"), get("capex"))
-    row["net_margin"] = calculate_ratio(get("net_income"), get("revenue"))
-    row["operating_margin"] = calculate_ratio(get("operating_income"), get("revenue"))
-    row["gross_margin"] = calculate_ratio(get("gross_profit"), get("revenue"))
-    row["fcf_margin"] = calculate_ratio(row["fcf"], get("revenue"))
-    row["current_ratio"] = calculate_ratio(get("current_assets"), get("current_liabilities"))
-    row["liquid_funds"] = sum_if_complete(get("cash"), get("short_term_investments"))
-    row["quick_assets"] = sum_if_complete(row["liquid_funds"], get("receivables"))
-    row["quick_ratio"] = calculate_ratio(row["quick_assets"], get("current_liabilities"))
-    row["cash_ratio"] = calculate_ratio(row["liquid_funds"], get("current_liabilities"))
-    row["working_capital"] = subtract_if_complete(get("current_assets"), get("current_liabilities"))
-    row["cash_conversion"] = calculate_ratio(get("operating_cash_flow"), get("net_income"))
+
+    # Use total short-term borrowings when that input is configured.
+    # Do not add commercial paper again.
+    if "short_term_debt" in inputs:
+        short_term_debt = get("short_term_debt")
+        row["short_term_debt_basis"] = "Short-term borrowings"
+    else:
+        short_term_debt = get("commercial_paper")
+        row["short_term_debt_basis"] = "Commercial paper"
+
+    row["total_debt"] = calculate_total_debt(
+        get("long_term_debt"),
+        get("current_debt"),
+        short_term_debt,
+    )
+
+    row["net_debt"] = calculate_net_debt(
+        row["total_debt"], get("cash")
+    )
+
+    row["debt_to_equity"] = calculate_ratio(
+        row["total_debt"], get("equity")
+    )
+
+    row["gross_profit"] = get("gross_profit")
+    row["gross_profit_basis"] = "Reported"
+
+    if row["gross_profit"] is None:
+        row["gross_profit"] = subtract_if_complete(
+            get("revenue"), get("cost_of_revenue")
+        )
+        row["gross_profit_basis"] = (
+            "Derived: total revenue minus cost of revenue"
+            if row["gross_profit"] is not None else "Unavailable"
+        )
+
+    row["fcf"] = subtract_if_complete(
+        get("operating_cash_flow"), get("capex")
+    )
+
+    row["net_margin"] = calculate_ratio(
+        get("net_income"), get("revenue")
+    )
+    row["operating_margin"] = calculate_ratio(
+        get("operating_income"), get("revenue")
+    )
+    row["gross_margin"] = calculate_ratio(
+        row["gross_profit"], get("revenue")
+    )
+    row["fcf_margin"] = calculate_ratio(
+        row["fcf"], get("revenue")
+    )
+    row["current_ratio"] = calculate_ratio(
+        get("current_assets"), get("current_liabilities")
+    )
+
+    row["liquid_funds"] = sum_if_complete(
+        get("cash"), get("short_term_investments")
+    )
+    row["quick_assets"] = sum_if_complete(
+        row["liquid_funds"], get("receivables")
+    )
+
+    row["quick_ratio"] = calculate_ratio(
+        row["quick_assets"], get("current_liabilities")
+    )
+    row["cash_ratio"] = calculate_ratio(
+        row["liquid_funds"], get("current_liabilities")
+    )
+    row["working_capital"] = subtract_if_complete(
+        get("current_assets"), get("current_liabilities")
+    )
+    row["cash_conversion"] = calculate_ratio(
+        get("operating_cash_flow"), get("net_income")
+    )
+
     return row
 
 

@@ -35,3 +35,30 @@ COMMERCIAL_PAPER_OVERRIDES = {
     2022: {"value": 0, "source": "https://www.microsoft.com/investor/reports/ar22/"},
     2026: {"value": 0, "source": "https://www.sec.gov/Archives/edgar/data/789019/000119312526323660/msft-20260630.htm"},
 }
+COMPANY_FLOW_OVERRIDES = {
+    "WMT": {
+        "cost_of_revenue": "CostOfRevenue",
+    },
+}
+
+COMPANY_BALANCE_OVERRIDES = {
+    "AAPL": {
+        "short_term_investments": "MarketableSecuritiesCurrent",
+    },
+    "WMT": {
+        "short_term_debt": "ShortTermBorrowings",
+        "receivables": "ReceivablesNetCurrent",
+    },
+}
+
+
+def get_company_concepts(ticker):
+    ticker = ticker.strip().upper()
+
+    flows = FLOW_CONCEPTS.copy()
+    balances = BALANCE_CONCEPTS.copy()
+
+    flows.update(COMPANY_FLOW_OVERRIDES.get(ticker, {}))
+    balances.update(COMPANY_BALANCE_OVERRIDES.get(ticker, {}))
+
+    return flows, balances

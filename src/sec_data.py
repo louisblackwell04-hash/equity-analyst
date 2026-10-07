@@ -64,3 +64,152 @@ def extract_inputs(company_data):
     for year, override in COMMERCIAL_PAPER_OVERRIDES.items():
         series["commercial_paper"][year] = override["value"]
     return series
+
+def get_company_submissions(cik, user_agent):
+    if not user_agent or not user_agent.strip():
+        raise ValueError("Set SEC_USER_AGENT in your .env file.")
+
+    url = (
+        "https://data.sec.gov/submissions/"
+        f"CIK{str(cik).zfill(10)}.json"
+    )
+
+    response = requests.get(
+        url,
+        headers={"User-Agent": user_agent},
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    return response.json()
+def get_annual_report_dates(cik, user_agent, start_year=2018):
+    submissions = get_company_submissions(cik, user_agent)
+    dates = set()
+
+    def collect_dates(filings):
+        for form, date in zip(
+            filings.get("form", []),
+            filings.get("reportDate", []),
+        ):
+            if form == "10-K" and date:
+                if int(date[:4]) >= start_year:
+                    dates.add(date)
+
+    collect_dates(submissions["filings"]["recent"])
+
+    for archive in submissions["filings"].get("files", []):
+        if archive.get("filingTo", "9999-12-31") < f"{start_year}-01-01":
+            continue
+
+        response = requests.get(
+            f'https://data.sec.gov/submissions/{archive["name"]}',
+            headers={"User-Agent": user_agent},
+            timeout=30,
+        )
+        response.raise_for_status()
+        collect_dates(response.json())
+
+    return sorted(dates)
+def get_balances_for_dates(company_data, concept, report_dates):
+    fact = company_data["facts"]["us-gaap"].get(concept, {})
+    records = fact.get("units", {}).get("USD", [])
+    selected = {date: None for date in report_dates}
+
+    for item in records:
+        if item["form"] not in ("10-K", "10-K/A"):
+            continue
+
+        if "start" in item or item["end"] not in selected:
+            continue
+
+        date = item["end"]
+        previous = selected[date]
+
+        filing_order = (item["filed"], item["accn"])
+        previous_order = (
+            (previous["filed"], previous["accn"])
+            if previous is not None else ("", "")
+        )
+
+        if filing_order > previous_order:
+            selected[date] = item
+
+    return selected
+def get_flows_for_dates(company_data, concept, report_dates):
+    fact = company_data["facts"]["us-gaap"].get(concept, {})
+    records = fact.get("units", {}).get("USD", [])
+    selected = {date: None for date in report_dates}
+
+    for item in records:
+        if item["form"] not in ("10-K", "10-K/A"):
+            continue
+
+        if "start" not in item or item["end"] not in selected:
+            continue
+
+        start = datetime.strptime(item["start"], "%Y-%m-%d")
+        end = datetime.strptime(item["end"], "%Y-%m-%d")
+        days = (end - start).days
+
+        if not 330 <= days <= 380:
+            continue
+
+        date = item["end"]
+        previous = selected[date]
+
+        filing_order = (item["filed"], item["accn"])
+        previous_order = (
+            (previous["filed"], previous["accn"])
+            if previous is not None else ("", "")
+        )
+
+        if filing_order > previous_order:
+            selected[date] = item
+
+    return selected
+def get_financial_records(
+    company_data,
+    report_dates,
+    flow_concepts,
+    balance_concepts,
+):
+    selected = {}
+
+    for metric, concept in flow_concepts.items():
+        selected[metric] = get_flows_for_dates(
+            company_data, concept, report_dates
+        )
+
+    for metric, concept in balance_concepts.items():
+        selected[metric] = get_balances_for_dates(
+            company_data, concept, report_dates
+        )
+
+    return selected
+def extract_inputs_for_dates(company_data, report_dates, ticker):
+    if __package__:
+        from .company_config import get_company_concepts
+    else:
+        from company_config import get_company_concepts
+
+    flows, balances = get_company_concepts(ticker)
+
+    records = get_financial_records(
+        company_data,
+        report_dates,
+        flows,
+        balances,
+    )
+
+    series = {}
+
+    for metric, annual_records in records.items():
+        series[metric] = {}
+
+        for date, record in annual_records.items():
+            year = int(date[:4])
+            series[metric][year] = (
+                record["val"] if record is not None else None
+            )
+
+    return series
