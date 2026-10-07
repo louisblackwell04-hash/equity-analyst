@@ -15,6 +15,7 @@ from company_config import (
 from company_lookup import find_company
 from reporting import print_report, write_summary_csv
 from sec_data import (
+    check_period_consistency,
     extract_inputs,
     extract_inputs_for_dates,
     get_annual_report_dates,
@@ -36,7 +37,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     ticker = args.ticker.strip().upper()
-
+    period_checks = {}
     if args.facts_file:
         # Preserve the existing offline Microsoft baseline.
         facts = load_company_facts(args.facts_file)
@@ -72,6 +73,21 @@ def main(argv=None):
             raise ValueError("No annual report dates were found.")
 
         series = extract_inputs_for_dates(facts, dates, ticker)
+        period_checks = check_period_consistency(
+            facts, dates, ticker
+        )
+
+        conflicting_dates = [
+            date
+            for date, check in period_checks.items()
+            if check["different_flow_periods"]
+        ]
+
+        if conflicting_dates:
+            raise ValueError(
+                "Annual inputs cover different flow periods: "
+                + ", ".join(conflicting_dates)
+            )
 
         if ticker == "MSFT":
             if company["cik"] != CIK:
@@ -179,6 +195,7 @@ def main(argv=None):
         "notes": notes,
         "missing_inputs": missing_inputs,
         "unavailable_results": unavailable_results,
+        "period_checks": period_checks,    
     }
 
     metadata_path = path.with_suffix(".metadata.json")

@@ -213,3 +213,40 @@ def extract_inputs_for_dates(company_data, report_dates, ticker):
             )
 
     return series
+def check_period_consistency(company_data, report_dates, ticker):
+    if __package__:
+        from .company_config import get_company_concepts
+    else:
+        from company_config import get_company_concepts
+
+    flows, balances = get_company_concepts(ticker)
+    records = get_financial_records(
+        company_data, report_dates, flows, balances
+    )
+
+    checks = {}
+
+    for date in report_dates:
+        filings = {}
+        starts = {}
+
+        for metric, annual_records in records.items():
+            record = annual_records[date]
+
+            if record is None:
+                continue
+
+            accession = record["accn"]
+            filings.setdefault(accession, []).append(metric)
+
+            if "start" in record:
+                starts.setdefault(record["start"], []).append(metric)
+
+        checks[date] = {
+            "filings": filings,
+            "flow_start_dates": starts,
+            "multiple_filings": len(filings) > 1,
+            "different_flow_periods": len(starts) > 1,
+        }
+
+    return checks
