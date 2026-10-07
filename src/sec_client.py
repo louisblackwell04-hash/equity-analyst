@@ -1,4 +1,5 @@
 """Run the financial analysis from saved facts or SEC downloads."""
+import sys
 import json
 import argparse
 import os
@@ -209,4 +210,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ValueError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        raise SystemExit(1)
