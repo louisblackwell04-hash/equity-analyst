@@ -232,5 +232,46 @@ with xlsxwriter.Workbook(excel_path) as workbook:
     debt_chart.set_size({"width": 760, "height": 340})
 
     overview.insert_chart("B20", debt_chart)
+    liquidity_chart = workbook.add_chart({"type": "line"})
+
+    liquidity_metrics = [
+        ("Current ratio", "Current ratio", "#17365D"),
+        ("Quick ratio", "Quick ratio", "#008080"),
+        (
+            "Cash ratio including short-term investments",
+            "Cash ratio",
+            "#8497B0"
+        )
+    ]
+
+    for metric, label, color in liquidity_metrics:
+        history_row = metrics.index(metric) + 4
+
+        liquidity_chart.add_series({
+            "name": label,
+            "categories": ["Financial History", 3, 1, 3, last_column],
+            "values": [
+                "Financial History",
+                history_row, 1,
+                history_row, last_column
+            ],
+            "line": {"color": color, "width": 2.5}
+        })
+
+    liquidity_chart.set_title({"name": "Liquidity Ratio History"})
+    liquidity_chart.set_x_axis({"name": "Fiscal year"})
+    liquidity_chart.set_y_axis({
+        "name": "Ratio (x)",
+        "num_format": '0.0"x"',
+        "major_gridlines": {
+            "visible": True,
+            "line": {"color": "#E5EAF0"}
+        }
+    })
+    liquidity_chart.set_legend({"position": "bottom"})
+    liquidity_chart.set_chartarea({"border": {"none": True}})
+    liquidity_chart.set_size({"width": 760, "height": 340})
+
+    overview.insert_chart("B43", liquidity_chart)
 
 print(f"Saved: {excel_path}")
