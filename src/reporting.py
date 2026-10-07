@@ -59,7 +59,7 @@ def print_report(rows, ticker=None):
                 "Long-Term Debt + Short-Term Borrowings ($ billions)"
             ),
             "gross_margin": (
-                "Derived Gross Margin — Total Revenue Basis"
+                "Derived Gross Margin — Net Sales Basis"
             ),
             "receivables": "Current Receivables ($ billions)",
         }

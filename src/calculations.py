@@ -62,12 +62,24 @@ def calculate_year_metrics(inputs):
     row["gross_profit"] = get("gross_profit")
     row["gross_profit_basis"] = "Reported"
 
+    sales_basis = (
+        get("net_sales")
+        if "net_sales" in inputs
+        else get("revenue")
+    )
+    sales_label = (
+        "net sales" if "net_sales" in inputs else "total revenue"
+    )
+
+    row["gross_profit"] = get("gross_profit")
+    row["gross_profit_basis"] = "Reported"
+
     if row["gross_profit"] is None:
         row["gross_profit"] = subtract_if_complete(
-            get("revenue"), get("cost_of_revenue")
+            sales_basis, get("cost_of_revenue")
         )
         row["gross_profit_basis"] = (
-            "Derived: total revenue minus cost of revenue"
+            f"Derived: {sales_label} minus cost of revenue"
             if row["gross_profit"] is not None else "Unavailable"
         )
 
@@ -82,7 +94,7 @@ def calculate_year_metrics(inputs):
         get("operating_income"), get("revenue")
     )
     row["gross_margin"] = calculate_ratio(
-        row["gross_profit"], get("revenue")
+        row["gross_profit"], sales_basis
     )
     row["fcf_margin"] = calculate_ratio(
         row["fcf"], get("revenue")

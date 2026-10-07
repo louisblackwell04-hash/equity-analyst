@@ -37,6 +37,8 @@ COMMERCIAL_PAPER_OVERRIDES = {
 }
 COMPANY_FLOW_OVERRIDES = {
     "WMT": {
+        "revenue": "Revenues",
+        "net_sales": "RevenueFromContractWithCustomerExcludingAssessedTax",
         "cost_of_revenue": "CostOfRevenue",
     },
 }

@@ -38,6 +38,17 @@ REFERENCES = {
         "balance_page": 52,
         "cash_flow_page": 53,
     },
+    "WMT": {
+        "cik": "0000104169",
+        "file": "wmt_2026_10k_reference.csv",
+        "source": (
+            "https://www.sec.gov/Archives/edgar/data/104169/"
+            "000010416926000055/wmt-20260131.htm"
+        ),
+        "income_page": 52,
+        "balance_page": 54,
+        "cash_flow_page": 56,
+    },
 }
 
 
@@ -74,8 +85,14 @@ def main():
     )
 
     income_metrics = {
-        "revenue", "net_income", "operating_income", "gross_profit"
+        "revenue",
+        "net_sales",
+        "net_income",
+        "operating_income",
+        "gross_profit",
+        "cost_of_revenue",
     }
+    
     cash_flow_metrics = {"operating_cash_flow", "capex"}
     checks = []
 

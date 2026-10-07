@@ -106,7 +106,7 @@ def main(argv=None):
 
         if ticker == "WMT":
             print(
-                "Note: gross profit is derived from total revenue minus "
+                "Note: gross profit is derived from net sales minus "
                 "cost of revenue. Receivables include broader current "
                 "receivables. Missing investments remain unavailable."
             )
@@ -136,7 +136,7 @@ def main(argv=None):
 
     if ticker == "WMT":
         notes.append(
-            "Gross profit is derived from total revenue minus "
+            "Gross profit is derived from net sales minus "
             "cost of revenue. Current receivables include broader "
             "receivables. Missing investments remain unavailable."
         )
