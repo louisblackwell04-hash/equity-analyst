@@ -231,6 +231,9 @@ def build_report(csv_path, excel_path):
                 cached_value
             )
             metric_keys = {
+                "Debt excluding leases ($ billions)": "total_debt",
+                "Net debt excluding leases ($ billions)": "net_debt",
+                "Debt-to-equity excluding leases": "debt_to_equity",
                 "Current ratio": "current_ratio",
                 "Quick ratio": "quick_ratio",
                 "Cash ratio including short-term investments": "cash_ratio",
@@ -255,6 +258,24 @@ def build_report(csv_path, excel_path):
             "internal:'Financial History'!A1",
             string="View full financial history"
         )
+        chart_data = workbook.add_worksheet("Chart Data")
+        chart_data.hide()
+
+        for column, record in enumerate(rows, start=1):
+            chart_data.write_number(
+                3, column, int(record["Year"])
+            )
+
+        for index, metric in enumerate(metrics):
+            for column, record in enumerate(rows, start=1):
+                value = record[metric]
+
+                if value == "":
+                    chart_data.write_blank(index + 4, column, None)
+                else:
+                    chart_data.write_number(
+                        index + 4, column, float(value)
+                    )
         debt_chart = workbook.add_chart({"type": "line"})
 
         chart_metrics = [
@@ -268,9 +289,9 @@ def build_report(csv_path, excel_path):
 
             debt_chart.add_series({
                 "name": label,
-                "categories": ["Financial History", 3, 1, 3, last_column],
+                "categories": ["Chart Data", 3, 1, 3, last_column],
                 "values": [
-                    "Financial History",
+                    "Chart Data",
                     history_row, 1,
                     history_row, last_column
                 ],
@@ -291,6 +312,8 @@ def build_report(csv_path, excel_path):
         debt_chart.set_chartarea({"border": {"none": True}})
         debt_chart.set_size({"width": 760, "height": 340})
 
+        debt_chart.show_hidden_data()
+        debt_chart.show_blanks_as("gap")
         overview.insert_chart("B20", debt_chart)
         liquidity_chart = workbook.add_chart({"type": "line"})
 
@@ -312,9 +335,9 @@ def build_report(csv_path, excel_path):
 
             liquidity_chart.add_series({
                 "name": label,
-                "categories": ["Financial History", 3, 1, 3, last_column],
+                "categories": ["Chart Data", 3, 1, 3, last_column],
                 "values": [
-                    "Financial History",
+                    "Chart Data",
                     history_row, 1,
                     history_row, last_column
                 ],
@@ -335,8 +358,9 @@ def build_report(csv_path, excel_path):
         liquidity_chart.set_chartarea({"border": {"none": True}})
         liquidity_chart.set_size({"width": 760, "height": 340})
 
+        liquidity_chart.show_hidden_data()
+        liquidity_chart.show_blanks_as("gap")
         overview.insert_chart("B43", liquidity_chart)
-
     return excel_path
 
 

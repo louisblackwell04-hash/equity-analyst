@@ -94,14 +94,10 @@ def main(argv=None):
             if company["cik"] != CIK:
                 raise ValueError("Microsoft company ID does not match.")
 
-            for year, override in COMMERCIAL_PAPER_OVERRIDES.items():
-                if year in series["commercial_paper"]:
-                    if series["commercial_paper"][year] is None:
-                        series["commercial_paper"][year] = override["value"]
-
             print(
-                "Note: Microsoft retains documented manual "
-                "commercial-paper assumptions pending filing validation."
+                "Note: missing commercial-paper balances are not "
+                "assumed to be zero. Dependent debt results remain "
+                "unavailable."
             )
 
         if ticker == "WMT":
@@ -129,10 +125,16 @@ def main(argv=None):
     notes = []
 
     if ticker == "MSFT":
-        notes.append(
-            "Commercial-paper zeros for 2020–2022 and 2026 "
-            "include inherited manual assumptions pending validation."
-        )
+        if args.facts_file:
+            notes.append(
+                "The legacy offline baseline includes manual "
+                "commercial-paper assumptions."
+            )
+        else:
+            notes.append(
+                "Missing commercial-paper balances are not assumed "
+                "to be zero. Dependent debt results are unavailable."
+            )
 
     if ticker == "WMT":
         notes.append(
@@ -157,6 +159,23 @@ def main(argv=None):
 
     for row in rows:
         reasons = {}
+        debt_input = (
+            "short_term_debt"
+            if "short_term_debt" in row
+            else "commercial_paper"
+        )
+
+        missing_debt = [
+            metric
+            for metric in ("long_term_debt", "current_debt", debt_input)
+            if row.get(metric) is None
+        ]
+
+        if missing_debt:
+            reason = "Missing debt inputs: " + ", ".join(missing_debt)
+
+            for metric in ("total_debt", "net_debt", "debt_to_equity"):
+                reasons[metric] = reason
 
         if row.get("short_term_investments") is None:
             reasons["quick_ratio"] = "Missing short-term investment data."
