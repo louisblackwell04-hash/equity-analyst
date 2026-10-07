@@ -155,8 +155,9 @@ with xlsxwriter.Workbook(excel_path) as workbook:
         "Current ratio",
         "Quick ratio",
         "Cash ratio including short-term investments",
-        "Working capital ($ billions)"
-    ]
+        "Working capital ($ billions)",
+        "Operating cash flow / net income"
+    ]    
 
     latest_column = xlsxwriter.utility.xl_col_to_name(last_column)
 
