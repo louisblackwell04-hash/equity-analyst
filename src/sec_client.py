@@ -392,12 +392,23 @@ with open("output/financial_summary.csv", "w", newline="") as file:
         "Current ratio",
         "Quick ratio",
         "Cash ratio including short-term investments",
-        "Working capital ($ billions)"
+        "Working capital ($ billions)",
+        "Operating cash flow / net income"
     ])
 
     for year in sorted(cash_by_year):
         if year >= 2018:
             cash = cash_by_year[year]["val"]
+            income_record = net_income_by_year.get(year)
+            cash_flow_record = operating_cash_flow_by_year.get(year)
+
+            cash_conversion_value = (
+                f'{cash_flow_record["val"] / income_record["val"]:.2f}'
+                if income_record is not None
+                and cash_flow_record is not None
+                and income_record["val"] > 0
+                else ""
+            )
 
             equity = equity_by_year.get(year)
             equity_value = (
@@ -438,6 +449,7 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                 if assets is not None and liabilities is not None
                 else ""
             )
+
             if (
                 year in debt_by_year
                 and year in current_debt_by_year
@@ -465,7 +477,8 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     current_ratio_value,
                     quick_ratio_value,
                     cash_ratio_value,
-                    working_capital_value
+                    working_capital_value,
+                    cash_conversion_value
                 ])
             else:
                 writer.writerow([
@@ -478,7 +491,23 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     current_ratio_value,
                     quick_ratio_value,
                     cash_ratio_value,
-                    working_capital_value
+                    working_capital_value,
+                    cash_conversion_value
                 ])
 
 print("\nSaved: output/financial_summary.csv")
+print("\nOperating Cash Flow / Net Income")
+
+for year in sorted(net_income_by_year):
+    if year >= 2018:
+        if year in operating_cash_flow_by_year:
+            net_income = net_income_by_year[year]["val"]
+            operating_cash_flow = operating_cash_flow_by_year[year]["val"]
+
+            if net_income > 0:
+                cash_conversion = operating_cash_flow / net_income
+                print(year, f"{cash_conversion:.2f}x")
+            else:
+                print(year, "Not meaningful: net income is zero or negative")
+        else:
+            print(year, "Unavailable")
