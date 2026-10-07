@@ -3,7 +3,11 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 import csv
-
+from calculations import (
+    calculate_total_debt,
+    calculate_net_debt,
+    calculate_ratio,
+)
 
 load_dotenv()
 
@@ -200,37 +204,49 @@ commercial_paper_by_year[2021] = {"val": 0}
 commercial_paper_by_year[2022] = {"val": 0}
 # Manually reviewed against the 2026 balance sheet and debt note.
 commercial_paper_by_year[2026] = {"val": 0}
+total_debt_by_year = {}
+
+for year in sorted(debt_by_year):
+    long_term = debt_by_year[year]["val"]
+    current = current_debt_by_year.get(year, {}).get("val")
+    commercial_paper = commercial_paper_by_year.get(year, {}).get("val")
+
+    total_debt_by_year[year] = calculate_total_debt(
+        long_term,
+        current,
+        commercial_paper
+    )
+
 print("\nLong-Term Debt + Commercial Paper ($ billions)")
 
-for year in sorted(debt_by_year):
+for year in sorted(total_debt_by_year):
     if year >= 2018:
-        if year in current_debt_by_year and year in commercial_paper_by_year:
-            total = (
-                debt_by_year[year]["val"]
-                + current_debt_by_year[year]["val"]
-                + commercial_paper_by_year[year]["val"]
-            )
-            print(year, f"{total / 1_000_000_000:.2f}")
-        else:
+        total = total_debt_by_year[year]
+
+        if total is None:
             print(year, "Unavailable")
+        else:
+            print(year, f"{total / 1_000_000_000:.2f}")
+net_debt_by_year = {}
+
+for year in sorted(total_debt_by_year):
+    cash = cash_by_year.get(year, {}).get("val")
+
+    net_debt_by_year[year] = calculate_net_debt(
+        total_debt_by_year[year],
+        cash
+    )
+
 print("\nNet Debt — Excluding Leases ($ billions)")
 
-for year in sorted(debt_by_year):
+for year in sorted(net_debt_by_year):
     if year >= 2018:
-        if (
-            year in current_debt_by_year
-            and year in commercial_paper_by_year
-            and year in cash_by_year
-        ):
-            total_debt = (
-                debt_by_year[year]["val"]
-                + current_debt_by_year[year]["val"]
-                + commercial_paper_by_year[year]["val"]
-            )
-            net_debt = total_debt - cash_by_year[year]["val"]
-            print(year, f"{net_debt / 1_000_000_000:.2f}")
-        else:
+        net_debt = net_debt_by_year[year]
+
+        if net_debt is None:
             print(year, "Unavailable")
+        else:
+            print(year, f"{net_debt / 1_000_000_000:.2f}")
 equity_by_year = get_year_end_balances(
     msft_data,
     "StockholdersEquity"
@@ -242,29 +258,28 @@ for year in sorted(equity_by_year):
     if year >= 2018:
         value = equity_by_year[year]["val"]
         print(year, f"{value / 1_000_000_000:.2f}")
-print("\nDebt-to-Equity — Excluding Leases")
+debt_to_equity_by_year = {}
 
 for year in sorted(equity_by_year):
-    if year >= 2018:
-        if (
-            year in debt_by_year
-            and year in current_debt_by_year
-            and year in commercial_paper_by_year
-        ):
-            total_debt = (
-                debt_by_year[year]["val"]
-                + current_debt_by_year[year]["val"]
-                + commercial_paper_by_year[year]["val"]
-            )
-            equity = equity_by_year[year]["val"]
+    equity = equity_by_year[year]["val"]
 
-            if equity > 0:
-                ratio = total_debt / equity
-                print(year, f"{ratio:.2f}x")
-            else:
-                print(year, "Not meaningful: equity is zero or negative")
+    debt_to_equity_by_year[year] = calculate_ratio(
+        total_debt_by_year.get(year),
+        equity
+    )
+
+print("\nDebt-to-Equity — Excluding Leases")
+
+for year in sorted(debt_to_equity_by_year):
+    if year >= 2018:
+        ratio = debt_to_equity_by_year[year]
+
+        if ratio is not None:
+            print(year, f"{ratio:.2f}x")
+        elif equity_by_year[year]["val"] <= 0:
+            print(year, "Not meaningful: equity is zero or negative")
         else:
-            print(year, "Unavailable")       
+            print(year, "Unavailable")   
 current_assets_by_year = get_year_end_balances(
     msft_data,
     "AssetsCurrent"
@@ -450,50 +465,38 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                 else ""
             )
 
-            if (
-                year in debt_by_year
-                and year in current_debt_by_year
-                and year in commercial_paper_by_year
-            ):
-                debt = (
-                    debt_by_year[year]["val"]
-                    + current_debt_by_year[year]["val"]
-                    + commercial_paper_by_year[year]["val"]
-                )
+            debt = total_debt_by_year.get(year)
+            net_debt = net_debt_by_year.get(year)
+            debt_to_equity = debt_to_equity_by_year.get(year)
 
-                debt_to_equity = (
-                    f'{debt / equity["val"]:.2f}'
-                    if equity is not None and equity["val"] > 0
-                    else ""
-                )
+            debt_value = (
+                f"{debt / 1_000_000_000:.2f}"
+                if debt is not None else ""
+            )
 
-                writer.writerow([
-                    year,
-                    f"{cash / 1_000_000_000:.2f}",
-                    f"{debt / 1_000_000_000:.2f}",
-                    f"{(debt - cash) / 1_000_000_000:.2f}",
-                    equity_value,
-                    debt_to_equity,
-                    current_ratio_value,
-                    quick_ratio_value,
-                    cash_ratio_value,
-                    working_capital_value,
-                    cash_conversion_value
-                ])
-            else:
-                writer.writerow([
-                    year,
-                    f"{cash / 1_000_000_000:.2f}",
-                    "",
-                    "",
-                    equity_value,
-                    "",
-                    current_ratio_value,
-                    quick_ratio_value,
-                    cash_ratio_value,
-                    working_capital_value,
-                    cash_conversion_value
-                ])
+            net_debt_value = (
+                f"{net_debt / 1_000_000_000:.2f}"
+                if net_debt is not None else ""
+            )
+
+            debt_to_equity_value = (
+                f"{debt_to_equity:.2f}"
+                if debt_to_equity is not None else ""
+            )
+
+            writer.writerow([
+                year,
+                f"{cash / 1_000_000_000:.2f}",
+                debt_value,
+                net_debt_value,
+                equity_value,
+                debt_to_equity_value,
+                current_ratio_value,
+                quick_ratio_value,
+                cash_ratio_value,
+                working_capital_value,
+                cash_conversion_value
+            ])
 
 print("\nSaved: output/financial_summary.csv")
 print("\nOperating Cash Flow / Net Income")
