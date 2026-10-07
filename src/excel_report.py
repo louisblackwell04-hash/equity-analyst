@@ -230,7 +230,26 @@ def build_report(csv_path, excel_path):
                 result_format,
                 cached_value
             )
+            metric_keys = {
+                "Current ratio": "current_ratio",
+                "Quick ratio": "quick_ratio",
+                "Cash ratio including short-term investments": "cash_ratio",
+            }
 
+            metric_key = metric_keys.get(metric)
+            explanation = (
+                metadata.get("unavailable_results", {})
+                .get(latest_year, {})
+                .get(metric_key)
+            )
+
+            if explanation:
+                overview.write_comment(
+                    output_row,
+                    2,
+                    explanation,
+                    {"author": "Equity Analyst Lab"},
+                )
         overview.write_url(
             "B17",
             "internal:'Financial History'!A1",

@@ -123,7 +123,52 @@ def main(argv=None):
             "cost of revenue. Current receivables include broader "
             "receivables. Missing investments remain unavailable."
         )
+    missing_inputs = {}
 
+    for row in rows:
+        year = row["year"]
+
+        missing = [
+            metric
+            for metric, annual_values in series.items()
+            if annual_values.get(year) is None
+        ]
+
+        if missing:
+            missing_inputs[str(year)] = missing
+        unavailable_results = {}
+
+    for row in rows:
+        reasons = {}
+
+        if row.get("short_term_investments") is None:
+            reasons["quick_ratio"] = "Missing short-term investment data."
+            reasons["cash_ratio"] = "Missing short-term investment data."
+
+        if row.get("receivables") is None:
+            reasons["quick_ratio"] = "Missing receivables data."
+
+        liabilities = row.get("current_liabilities")
+
+        if liabilities is None or liabilities <= 0:
+            reason = (
+                "Missing current liabilities."
+                if liabilities is None
+                else "Current liabilities are zero or negative."
+            )
+            reasons["current_ratio"] = reason
+            reasons["quick_ratio"] = reason
+            reasons["cash_ratio"] = reason
+
+        if row.get("cash") is None:
+            reasons["quick_ratio"] = "Missing cash data."
+            reasons["cash_ratio"] = "Missing cash data."
+
+        if row.get("current_assets") is None:
+            reasons["current_ratio"] = "Missing current assets."
+
+        if reasons:
+            unavailable_results[str(row["year"])] = reasons
     metadata = {
         "ticker": ticker,
         "company_name": facts["entityName"],
@@ -132,6 +177,8 @@ def main(argv=None):
             date[:4]: date for date in report_dates
         },
         "notes": notes,
+        "missing_inputs": missing_inputs,
+        "unavailable_results": unavailable_results,
     }
 
     metadata_path = path.with_suffix(".metadata.json")
