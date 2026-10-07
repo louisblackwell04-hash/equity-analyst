@@ -390,7 +390,9 @@ with open("output/financial_summary.csv", "w", newline="") as file:
         "Shareholders' equity ($ billions)",
         "Debt-to-equity excluding leases",
         "Current ratio",
-        "Quick ratio"
+        "Quick ratio",
+        "Cash ratio including short-term investments",
+        "Working capital ($ billions)"
     ])
 
     for year in sorted(cash_by_year):
@@ -423,6 +425,19 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                 and liabilities["val"] > 0
                 else ""
             )
+            cash_ratio_value = (
+                f'{(cash + investments["val"]) / liabilities["val"]:.2f}'
+                if investments is not None
+                and liabilities is not None
+                and liabilities["val"] > 0
+                else ""
+            )
+
+            working_capital_value = (
+                f'{(assets["val"] - liabilities["val"]) / 1_000_000_000:.2f}'
+                if assets is not None and liabilities is not None
+                else ""
+            )
             if (
                 year in debt_by_year
                 and year in current_debt_by_year
@@ -448,7 +463,9 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     equity_value,
                     debt_to_equity,
                     current_ratio_value,
-                    quick_ratio_value
+                    quick_ratio_value,
+                    cash_ratio_value,
+                    working_capital_value
                 ])
             else:
                 writer.writerow([
@@ -459,7 +476,9 @@ with open("output/financial_summary.csv", "w", newline="") as file:
                     equity_value,
                     "",
                     current_ratio_value,
-                    quick_ratio_value
+                    quick_ratio_value,
+                    cash_ratio_value,
+                    working_capital_value
                 ])
 
 print("\nSaved: output/financial_summary.csv")
