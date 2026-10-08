@@ -1,12 +1,17 @@
 """Run the financial analysis from saved facts or SEC downloads."""
+from company_eligibility import check_company_eligibility
+from data_compatibility import check_data_compatibility
 import sys
 import json
 import argparse
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
+from dotenv import load_dotenv, dotenv_values
+from fmp_data import (
+    get_annual_balance_sheets,
+    fill_missing_balance_inputs,
+)
 from calculations import build_analysis
 from company_config import (
     CIK,
@@ -14,8 +19,10 @@ from company_config import (
     COMMERCIAL_PAPER_OVERRIDES,
 )
 from company_lookup import find_company
+from reviewed_inputs import fill_reviewed_inputs
 from reporting import print_report, write_summary_csv
 from sec_data import (
+    get_company_submissions,
     check_period_consistency,
     extract_inputs,
     extract_inputs_for_dates,
@@ -25,8 +32,6 @@ from sec_data import (
 )
 
 PROJECT_FOLDER = Path(__file__).resolve().parents[1]
-TEST_COMPANIES = {"MSFT", "AAPL", "WMT"}
-
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
@@ -35,10 +40,23 @@ def main(argv=None):
     parser.add_argument("--facts-file", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--ticker", default="MSFT")
+    parser.add_argument(
+        "--use-fmp",
+        action="store_true",
+        help="Use FMP to fill missing cash and short-term investments.",
+    )
     args = parser.parse_args(argv)
 
     ticker = args.ticker.strip().upper()
     period_checks = {}
+    compatibility = {"status": "Legacy offline baseline"}
+    fmp_sources = {}
+    reviewed_sources = {}
+
+    if args.facts_file and args.use_fmp:
+        raise ValueError(
+            "FMP fallback is unavailable for the legacy offline baseline."
+        )
     if args.facts_file:
         # Preserve the existing offline Microsoft baseline.
         facts = load_company_facts(args.facts_file)
@@ -53,11 +71,7 @@ def main(argv=None):
             PROJECT_FOLDER / "output" / "financial_summary.csv"
         )
     else:
-        if ticker not in TEST_COMPANIES:
-            raise ValueError(
-                "This stage supports MSFT, AAPL and WMT. "
-                "Broader ticker coverage is still being developed."
-            )
+
 
         load_dotenv(PROJECT_FOLDER / ".env")
         user_agent = os.getenv("SEC_USER_AGENT")
@@ -66,6 +80,14 @@ def main(argv=None):
         print(f'Company: {company["name"]} ({ticker})')
 
         facts = get_company_facts(company["cik"], user_agent)
+        submissions = get_company_submissions(
+            company["cik"], user_agent
+        )
+        eligibility = check_company_eligibility(
+            submissions, facts
+        )
+
+        print(f'Industry: {eligibility["industry"]}')
         dates = get_annual_report_dates(
             company["cik"], user_agent, START_YEAR
         )
@@ -74,6 +96,46 @@ def main(argv=None):
             raise ValueError("No annual report dates were found.")
 
         series = extract_inputs_for_dates(facts, dates, ticker)
+        reviewed_path = (
+            PROJECT_FOLDER / "data" / "reviewed_inputs.json"
+        )
+
+        if reviewed_path.exists():
+            series, reviewed_sources = fill_reviewed_inputs(
+                series,
+                reviewed_path,
+                ticker,
+                company["cik"],
+                dates,
+            )
+
+            reviewed_count = sum(
+                len(values) for values in reviewed_sources.values()
+            )
+            print(
+                f"Reviewed SEC fallback: "
+                f"{reviewed_count} missing inputs filled."
+            )
+
+        if args.use_fmp:
+            api_key = dotenv_values(
+                PROJECT_FOLDER / ".env"
+            ).get("FMP_API_KEY")
+
+            fmp_records = get_annual_balance_sheets(
+                ticker, api_key, limit=5
+            )
+
+            series, fmp_sources = fill_missing_balance_inputs(
+                series, fmp_records, dates
+            )
+
+            fallback_count = sum(
+                len(values) for values in fmp_sources.values()
+            )
+            print(f"FMP fallback: {fallback_count} missing inputs filled.")
+
+        compatibility = check_data_compatibility(series, dates)
         period_checks = check_period_consistency(
             facts, dates, ticker
         )
@@ -104,7 +166,7 @@ def main(argv=None):
             print(
                 "Note: gross profit is derived from net sales minus "
                 "cost of revenue. Receivables include broader current "
-                "receivables. Missing investments remain unavailable."
+                "receivables. Unresolved investment balances remain unavailable."
             )
 
         output = args.output or (
@@ -123,6 +185,32 @@ def main(argv=None):
         report_dates = dates
 
     notes = []
+    if reviewed_sources:
+        notes.append(
+            "Some missing inputs were supplied from reviewed SEC "
+            "disclosures. Company identity, reporting date, filing "
+            "reference and supporting evidence are recorded "
+            "in reviewed_sources."
+        )
+    if any(
+        row.get("fcf") is not None
+        and row.get("fcf_basis") == (
+            "Property, equipment, software and intangible asset purchases"
+        )
+        for row in rows
+    ):
+        notes.append(
+            "Calculated free cash flow uses operating cash flow minus "
+            "asset purchases. Some periods include software and intangible "
+            "assets. Separate financing principal payments are not deducted; "
+            "this may differ from company-reported free cash flow."
+        )
+    if fmp_sources:
+        notes.append(
+            "Some missing cash or short-term investment inputs "
+            "were supplied by FMP using matching reporting dates "
+            "and USD currency. Details are recorded in fmp_sources."
+        )
 
     if ticker == "MSFT":
         if args.facts_file:
@@ -140,7 +228,7 @@ def main(argv=None):
         notes.append(
             "Gross profit is derived from net sales minus "
             "cost of revenue. Current receivables include broader "
-            "receivables. Missing investments remain unavailable."
+            "receivables. Unresolved investment balances remain unavailable."
         )
     missing_inputs = {}
 
@@ -206,6 +294,10 @@ def main(argv=None):
         if reasons:
             unavailable_results[str(row["year"])] = reasons
     metadata = {
+         "gross_profit_basis": {
+            str(row["year"]): row.get("gross_profit_basis", "Unavailable")
+            for row in rows
+        },
         "ticker": ticker,
         "company_name": facts["entityName"],
         "cik": str(facts["cik"]).zfill(10),
@@ -213,9 +305,16 @@ def main(argv=None):
             date[:4]: date for date in report_dates
         },
         "notes": notes,
+        "fcf_basis": {
+            str(row["year"]): row["fcf_basis"]
+            for row in rows
+        },
+        "fmp_sources": fmp_sources,
+        "reviewed_sources": reviewed_sources,
         "missing_inputs": missing_inputs,
         "unavailable_results": unavailable_results,
-        "period_checks": period_checks,    
+        "period_checks": period_checks,
+        "data_compatibility": compatibility,
     }
 
     metadata_path = path.with_suffix(".metadata.json")

@@ -32,7 +32,7 @@ def calculate_growth(current, previous):
     return None if ratio is None else ratio - 1
 
 
-def calculate_year_metrics(inputs):
+def calculate_year_metrics(inputs, derive_gross_profit=False):
     row = dict(inputs)
     get = inputs.get
 
@@ -71,10 +71,11 @@ def calculate_year_metrics(inputs):
         "net sales" if "net_sales" in inputs else "total revenue"
     )
 
+    row["reported_gross_profit"] = get("gross_profit")
     row["gross_profit"] = get("gross_profit")
     row["gross_profit_basis"] = "Reported"
 
-    if row["gross_profit"] is None:
+    if derive_gross_profit or row["gross_profit"] is None:
         row["gross_profit"] = subtract_if_complete(
             sales_basis, get("cost_of_revenue")
         )
@@ -83,8 +84,20 @@ def calculate_year_metrics(inputs):
             if row["gross_profit"] is not None else "Unavailable"
         )
 
+    spending = get("capex")
+    row["fcf_basis"] = "Property and equipment purchases"
+
+    if spending is None:
+        spending = get("productive_asset_purchases")
+        row["fcf_basis"] = (
+            "Property, equipment, software and intangible asset purchases"
+            if spending is not None
+            else "Unavailable"
+        )
+
+    row["capital_spending_used"] = spending
     row["fcf"] = subtract_if_complete(
-        get("operating_cash_flow"), get("capex")
+        get("operating_cash_flow"), spending
     )
 
     row["net_margin"] = calculate_ratio(
@@ -127,14 +140,65 @@ def calculate_year_metrics(inputs):
 
 
 def build_analysis(series, start_year=2018):
-    years = sorted({year for values in series.values() for year in values})
+    years = sorted({
+        year for values in series.values() for year in values
+    })
+    displayed_years = [
+        year for year in years if year >= start_year
+    ]
+
+    sales_key = "net_sales" if "net_sales" in series else "revenue"
+
+    missing_reported_gross = any(
+        series.get("gross_profit", {}).get(year) is None
+        for year in displayed_years
+    )
+
+    complete_derivation_inputs = (
+        bool(displayed_years)
+        and all(
+            series.get(sales_key, {}).get(year) is not None
+            and series.get("cost_of_revenue", {}).get(year) is not None
+            for year in displayed_years
+        )
+    )
+
+    derive_consistently = (
+        missing_reported_gross and complete_derivation_inputs
+    )
+
     all_rows = {}
+
     for year in years:
-        row = calculate_year_metrics({key: values.get(year) for key, values in series.items()})
+        inputs = {
+            key: values.get(year)
+            for key, values in series.items()
+        }
+
+        row = calculate_year_metrics(
+            inputs,
+            derive_gross_profit=(
+                derive_consistently and year >= start_year
+            ),
+        )
         row["year"] = year
         all_rows[year] = row
+
     for year, row in all_rows.items():
         previous = all_rows.get(year - 1, {})
-        row["revenue_growth"] = calculate_growth(row.get("revenue"), previous.get("revenue"))
-        row["fcf_growth"] = calculate_growth(row["fcf"], previous.get("fcf"))
-    return [row for year, row in all_rows.items() if year >= start_year]
+        row["revenue_growth"] = calculate_growth(
+            row.get("revenue"), previous.get("revenue")
+        )
+        row["fcf_growth"] = calculate_growth(
+            row["fcf"], previous.get("fcf")
+        )
+        if (
+            row["fcf"] is not None
+            and previous.get("fcf") is not None
+            and row["fcf_basis"] != previous.get("fcf_basis")
+        ):
+            row["fcf_growth"] = None
+    return [
+        row for year, row in all_rows.items()
+        if year >= start_year
+    ]

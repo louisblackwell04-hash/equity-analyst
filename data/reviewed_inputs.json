@@ -1,0 +1,16 @@
+[
+  {
+    "ticker": "NVDA",
+    "cik": "0001045810",
+    "period_end": "2026-01-25",
+    "metric": "commercial_paper",
+    "value": 0,
+    "currency": "USD",
+    "unit": "dollars",
+    "source": "Reviewed SEC filing",
+    "accession": "0001045810-26-000021",
+    "source_url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000021/nvda-20260125.htm",
+    "location": "Outstanding Indebtedness and Commercial Paper Program",
+    "evidence": "The filing explicitly states that no commercial paper was outstanding at January 25, 2026."
+  }
+]

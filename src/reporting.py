@@ -64,6 +64,42 @@ def print_report(rows, ticker=None):
             "receivables": "Current Receivables ($ billions)",
         }
 
+    gross_bases = {
+        row.get("gross_profit_basis", "")
+        for row in rows
+        if row.get("gross_profit") is not None
+    }
+
+    if any(basis.startswith("Derived:") for basis in gross_bases):
+        if gross_bases == {"Derived: net sales minus cost of revenue"}:
+            heading_overrides["gross_margin"] = (
+                "Derived Gross Margin — Net Sales Basis"
+            )
+        elif gross_bases == {"Derived: total revenue minus cost of revenue"}:
+            heading_overrides["gross_margin"] = (
+                "Derived Gross Margin — Selected Revenue Basis"
+            )
+        else:
+            heading_overrides["gross_margin"] = (
+                "Gross Margin — Includes Derived Values"
+            )
+    broader_spending_used = any(
+        row.get("fcf") is not None
+        and row.get("fcf_basis") == (
+            "Property, equipment, software and intangible asset purchases"
+        )
+        for row in rows
+    )
+
+    if broader_spending_used:
+        heading_overrides.update({
+            "fcf": (
+                "Calculated Free Cash Flow — Includes Broader Asset Spending "
+                "($ billions)"
+            ),
+            "fcf_margin": "Calculated FCF Margin — Broader Spending Included",
+            "fcf_growth": "Calculated FCF Growth — Matching Spending Basis",
+        })
     for key, heading, kind in TERMINAL_METRICS:
         heading = heading_overrides.get(key, heading)
         print(f"\n{heading}")

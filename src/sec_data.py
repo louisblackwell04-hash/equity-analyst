@@ -173,16 +173,36 @@ def get_financial_records(
     flow_concepts,
     balance_concepts,
 ):
+    if __package__:
+        from .concept_registry import get_concept_candidates
+    else:
+        from concept_registry import get_concept_candidates
+
+    flows = flow_concepts.copy()
+    flows.setdefault("cost_of_revenue", "CostOfRevenue")
+    flows.setdefault(
+        "productive_asset_purchases",
+        "PaymentsToAcquireProductiveAssets",
+    )
     selected = {}
 
-    for metric, concept in flow_concepts.items():
-        selected[metric] = get_flows_for_dates(
-            company_data, concept, report_dates
+    for metric, concept in flows.items():
+        candidates = get_concept_candidates(
+            metric, concept, is_flow=True
+        )
+        selected[metric] = get_records_with_fallbacks(
+            company_data,
+            candidates,
+            report_dates,
+            is_flow=True,
         )
 
     for metric, concept in balance_concepts.items():
-        selected[metric] = get_balances_for_dates(
-            company_data, concept, report_dates
+        candidates = get_concept_candidates(metric, concept)
+        selected[metric] = get_records_with_fallbacks(
+            company_data,
+            candidates,
+            report_dates,
         )
 
     return selected
@@ -216,8 +236,10 @@ def extract_inputs_for_dates(company_data, report_dates, ticker):
 def check_period_consistency(company_data, report_dates, ticker):
     if __package__:
         from .company_config import get_company_concepts
+        from .concept_registry import CONCEPT_LABELS
     else:
         from company_config import get_company_concepts
+        from concept_registry import CONCEPT_LABELS
 
     flows, balances = get_company_concepts(ticker)
     records = get_financial_records(
@@ -229,6 +251,7 @@ def check_period_consistency(company_data, report_dates, ticker):
     for date in report_dates:
         filings = {}
         starts = {}
+        sources = {}
 
         for metric, annual_records in records.items():
             record = annual_records[date]
@@ -237,16 +260,59 @@ def check_period_consistency(company_data, report_dates, ticker):
                 continue
 
             accession = record["accn"]
+            concept = record["selected_concept"]
+
             filings.setdefault(accession, []).append(metric)
 
             if "start" in record:
                 starts.setdefault(record["start"], []).append(metric)
+
+            sources[metric] = {
+                "concept": concept,
+                "label": CONCEPT_LABELS.get(
+                    concept,
+                    company_data["facts"]["us-gaap"][concept].get(
+                        "label", concept
+                    ),
+                ),
+                "start": record.get("start"),
+                "end": record["end"],
+                "filed": record["filed"],
+                "accession": accession,
+                "form": record["form"],
+            }
 
         checks[date] = {
             "filings": filings,
             "flow_start_dates": starts,
             "multiple_filings": len(filings) > 1,
             "different_flow_periods": len(starts) > 1,
+            "sources": sources,
         }
 
     return checks
+def get_records_with_fallbacks(
+    company_data,
+    concepts,
+    report_dates,
+    is_flow=False,
+):
+    selector = (
+        get_flows_for_dates
+        if is_flow
+        else get_balances_for_dates
+    )
+
+    selected = {date: None for date in report_dates}
+
+    for concept in concepts:
+        candidates = selector(company_data, concept, report_dates)
+
+        for date, record in candidates.items():
+            if selected[date] is None and record is not None:
+                selected[date] = {
+                    **record,
+                    "selected_concept": concept,
+                }
+
+    return selected
