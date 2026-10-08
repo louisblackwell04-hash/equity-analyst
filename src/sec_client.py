@@ -20,6 +20,7 @@ from company_config import (
 )
 from company_lookup import find_company
 from reviewed_inputs import fill_reviewed_inputs
+from automatic_fallback import fill_from_annual_filings
 from reporting import print_report, write_summary_csv
 from sec_data import (
     get_company_submissions,
@@ -52,6 +53,8 @@ def main(argv=None):
     compatibility = {"status": "Legacy offline baseline"}
     fmp_sources = {}
     reviewed_sources = {}
+    filing_sources = {}
+    filing_status = {"status": "Legacy offline baseline"}
 
     if args.facts_file and args.use_fmp:
         raise ValueError(
@@ -95,7 +98,19 @@ def main(argv=None):
         if not dates:
             raise ValueError("No annual report dates were found.")
 
-        series = extract_inputs_for_dates(facts, dates, ticker)
+        series = extract_inputs_for_dates(facts, dates)
+
+        series, filing_sources, filing_status = fill_from_annual_filings(
+            series,
+            facts,
+            dates,
+            user_agent,
+            PROJECT_FOLDER / "output" / ".filing_cache",
+        )
+        filing_count = sum(
+            len(entries) for entries in filing_sources.values()
+        )
+        print(f"Original filing fallback: {filing_count} inputs filled.")
         reviewed_path = (
             PROJECT_FOLDER / "data" / "reviewed_inputs.json"
         )
@@ -152,23 +167,6 @@ def main(argv=None):
                 + ", ".join(conflicting_dates)
             )
 
-        if ticker == "MSFT":
-            if company["cik"] != CIK:
-                raise ValueError("Microsoft company ID does not match.")
-
-            print(
-                "Note: missing commercial-paper balances are not "
-                "assumed to be zero. Dependent debt results remain "
-                "unavailable."
-            )
-
-        if ticker == "WMT":
-            print(
-                "Note: gross profit is derived from net sales minus "
-                "cost of revenue. Receivables include broader current "
-                "receivables. Unresolved investment balances remain unavailable."
-            )
-
         output = args.output or (
             PROJECT_FOLDER / "output" / ticker / "financial_summary.csv"
         )
@@ -185,6 +183,28 @@ def main(argv=None):
         report_dates = dates
 
     notes = []
+
+    if filing_sources:
+        notes.append(
+            "Some missing inputs were extracted automatically from "
+            "original SEC filings. Details are recorded in filing_sources."
+        )
+
+    if filing_status.get("errors") or filing_status.get("rejected_inputs"):
+        notes.append(
+            "Some filing inputs could not be accepted. "
+            "Reasons are recorded in filing_status."
+        )
+
+    if any(
+        row.get("receivables_basis") == "Broader current receivables"
+        for row in rows
+    ):
+        notes.append(
+            "Some liquidity calculations use broader current receivables "
+            "when customer accounts receivable is unavailable. "
+            "The per-period basis is recorded in receivables_basis."
+        )
     if reviewed_sources:
         notes.append(
             "Some missing inputs were supplied from reviewed SEC "
@@ -212,24 +232,12 @@ def main(argv=None):
             "and USD currency. Details are recorded in fmp_sources."
         )
 
-    if ticker == "MSFT":
-        if args.facts_file:
-            notes.append(
-                "The legacy offline baseline includes manual "
-                "commercial-paper assumptions."
-            )
-        else:
-            notes.append(
-                "Missing commercial-paper balances are not assumed "
-                "to be zero. Dependent debt results are unavailable."
-            )
-
-    if ticker == "WMT":
+    if args.facts_file:
         notes.append(
-            "Gross profit is derived from net sales minus "
-            "cost of revenue. Current receivables include broader "
-            "receivables. Unresolved investment balances remain unavailable."
+            "The legacy offline baseline includes manual "
+            "commercial-paper assumptions."
         )
+
     missing_inputs = {}
 
     for row in rows:
@@ -305,12 +313,22 @@ def main(argv=None):
             date[:4]: date for date in report_dates
         },
         "notes": notes,
+        "debt_input_basis": {
+            str(row["year"]): row["short_term_debt_basis"]
+            for row in rows
+        },
+        "receivables_basis": {
+            str(row["year"]): row["receivables_basis"]
+            for row in rows
+        },
         "fcf_basis": {
             str(row["year"]): row["fcf_basis"]
             for row in rows
         },
         "fmp_sources": fmp_sources,
         "reviewed_sources": reviewed_sources,
+        "filing_sources": filing_sources,
+        "filing_status": filing_status,
         "missing_inputs": missing_inputs,
         "unavailable_results": unavailable_results,
         "period_checks": period_checks,

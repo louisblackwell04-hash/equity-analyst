@@ -206,45 +206,35 @@ def get_financial_records(
         )
 
     return selected
-def extract_inputs_for_dates(company_data, report_dates, ticker):
+def extract_inputs_for_dates(company_data, report_dates, ticker=None):
+    """Select live inputs using shared rules, independent of ticker."""
     if __package__:
-        from .company_config import get_company_concepts
+        from .universal_selection import get_standard_records
     else:
-        from company_config import get_company_concepts
+        from universal_selection import get_standard_records
 
-    flows, balances = get_company_concepts(ticker)
+    records = get_standard_records(company_data, report_dates)
 
-    records = get_financial_records(
-        company_data,
-        report_dates,
-        flows,
-        balances,
-    )
-
-    series = {}
-
-    for metric, annual_records in records.items():
-        series[metric] = {}
-
-        for date, record in annual_records.items():
-            year = int(date[:4])
-            series[metric][year] = (
+    return {
+        metric: {
+            int(date[:4]): (
                 record["val"] if record is not None else None
             )
+            for date, record in annual_records.items()
+        }
+        for metric, annual_records in records.items()
+    }
 
-    return series
-def check_period_consistency(company_data, report_dates, ticker):
+
+def check_period_consistency(company_data, report_dates, ticker=None):
     if __package__:
-        from .company_config import get_company_concepts
+        from .universal_selection import get_standard_records
         from .concept_registry import CONCEPT_LABELS
     else:
-        from company_config import get_company_concepts
+        from universal_selection import get_standard_records
         from concept_registry import CONCEPT_LABELS
 
-    flows, balances = get_company_concepts(ticker)
-    records = get_financial_records(
-        company_data, report_dates, flows, balances
-    )
+    records = get_standard_records(company_data, report_dates)
 
     checks = {}
 

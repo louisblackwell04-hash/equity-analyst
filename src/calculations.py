@@ -40,7 +40,31 @@ def calculate_year_metrics(inputs, derive_gross_profit=False):
     # Do not add commercial paper again.
     if "short_term_debt" in inputs:
         short_term_debt = get("short_term_debt")
-        row["short_term_debt_basis"] = "Short-term borrowings"
+        row["reported_short_term_debt"] = short_term_debt
+        row["short_term_debt_basis"] = "Reported short-term borrowings"
+
+        if short_term_debt is None:
+            aggregate = get("current_debt_total_including_finance_leases")
+            current_long_term = get("current_debt")
+
+            if (
+                type(aggregate) is int
+                and type(current_long_term) is int
+                and aggregate >= 0
+                and current_long_term >= 0
+                and aggregate == current_long_term
+                and (
+                    get("commercial_paper") is None
+                    or get("commercial_paper") == 0
+                )
+            ):
+                short_term_debt = 0
+                row["short_term_debt_basis"] = (
+                    "Reconciled zero: aggregate current debt equals "
+                    "current long-term debt at reported precision"
+                )
+
+        row["short_term_debt"] = short_term_debt
     else:
         short_term_debt = get("commercial_paper")
         row["short_term_debt_basis"] = "Commercial paper"
@@ -116,11 +140,24 @@ def calculate_year_metrics(inputs, derive_gross_profit=False):
         get("current_assets"), get("current_liabilities")
     )
 
+    receivables = get("receivables")
+    row["reported_customer_receivables"] = receivables
+    row["receivables_basis"] = "Customer accounts receivable"
+
+    if receivables is None:
+        receivables = get("broader_current_receivables")
+        row["receivables_basis"] = (
+            "Broader current receivables"
+            if receivables is not None else "Unavailable"
+        )
+
+    row["receivables"] = receivables
+
     row["liquid_funds"] = sum_if_complete(
         get("cash"), get("short_term_investments")
     )
     row["quick_assets"] = sum_if_complete(
-        row["liquid_funds"], get("receivables")
+        row["liquid_funds"], receivables
     )
 
     row["quick_ratio"] = calculate_ratio(

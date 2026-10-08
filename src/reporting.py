@@ -53,16 +53,18 @@ def format_value(value, kind, terminal=False):
 def print_report(rows, ticker=None):
     heading_overrides = {}
 
-    if ticker == "WMT":
-        heading_overrides = {
-            "total_debt": (
-                "Long-Term Debt + Short-Term Borrowings ($ billions)"
-            ),
-            "gross_margin": (
-                "Derived Gross Margin — Net Sales Basis"
-            ),
-            "receivables": "Current Receivables ($ billions)",
-        }
+    if any("short_term_debt" in row for row in rows):
+        heading_overrides["total_debt"] = (
+            "Debt Excluding Leases — Complete Inputs Required ($ billions)"
+        )
+
+    if any(
+        row.get("receivables_basis") == "Broader current receivables"
+        for row in rows
+    ):
+        heading_overrides["receivables"] = (
+            "Current Receivables — Includes Broader Balances ($ billions)"
+        )
 
     gross_bases = {
         row.get("gross_profit_basis", "")

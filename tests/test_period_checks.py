@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from src.sec_data import check_period_consistency
 
@@ -20,28 +19,19 @@ class PeriodCheckTests(unittest.TestCase):
         facts = {
             "facts": {
                 "us-gaap": {
-                    "Revenue": {"units": {"USD": [revenue]}},
-                    "CashFlow": {"units": {"USD": [cash_flow]}},
+                    "Revenues": {
+                        "units": {"USD": [revenue]},
+                    },
+                    "NetCashProvidedByUsedInOperatingActivities": {
+                        "units": {"USD": [cash_flow]},
+                    },
                 }
             }
         }
 
-        concepts = (
-            {
-                "revenue": "Revenue",
-                "operating_cash_flow": "CashFlow",
-            },
-            {},
+        checks = check_period_consistency(
+            facts, ["2025-09-27"]
         )
-
-        with patch(
-            "src.company_config.get_company_concepts",
-            return_value=concepts,
-        ):
-            checks = check_period_consistency(
-                facts, ["2025-09-27"], "AAPL"
-            )
-
         return checks["2025-09-27"]
 
     def test_different_flow_periods_are_flagged(self):

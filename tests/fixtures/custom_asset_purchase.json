@@ -1,0 +1,26 @@
+{
+  "concept": "PurchasesOfPropertyAndEquipmentAndIntangibleAssets",
+  "definition": "The cash outflow associated with the acquisition of long-lived, physical assets that are used in the normal conduct of business to produce goods and services and not intended for resale; includes cash outflows to pay for construction of self-constructed assets, combined with the cash outflow to acquire asset without physical form usually arising from contractual or other legal rights, excluding goodwill.",
+  "period_type": "duration",
+  "balance": "credit",
+  "is_monetary": true,
+  "calculation_parents": [
+    {
+      "concept": "NetCashProvidedByUsedInInvestingActivities",
+      "namespace": "http://fasb.org/us-gaap/2020-01-31",
+      "weight": -1.0,
+      "role": "http://www.nvidia.com/role/CONSOLIDATEDSTATEMENTSOFCASHFLOWS"
+    }
+  ],
+  "namespace": "http://www.nvidia.com/20210131",
+  "val": 1128000000,
+  "start": "2020-01-27",
+  "end": "2021-01-31",
+  "currency": "USD",
+  "unit": "dollars",
+  "source": "SEC original filing",
+  "source_url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581021000010/nvda-20210131.htm",
+  "accn": "0001045810-21-000010",
+  "filed": "2021-02-26",
+  "form": "10-K"
+}

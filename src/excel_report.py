@@ -35,6 +35,119 @@ def build_report(csv_path, excel_path):
     latest_year = rows[-1]["Year"]
     latest_period_end = period_ends[latest_year]
 
+    metric_keys = {
+        "Cash ($ billions)": "cash",
+        "Debt excluding leases ($ billions)": "total_debt",
+        "Net debt excluding leases ($ billions)": "net_debt",
+        "Shareholders' equity ($ billions)": "equity",
+        "Debt-to-equity excluding leases": "debt_to_equity",
+        "Current ratio": "current_ratio",
+        "Quick ratio": "quick_ratio",
+        "Cash ratio including short-term investments": "cash_ratio",
+        "Working capital ($ billions)": "working_capital",
+        "Operating cash flow / net income": "cash_conversion",
+    }
+
+    dependencies = {
+        "cash": ["cash"],
+        "total_debt": ["long_term_debt", "current_debt", "short_term_debt"],
+        "net_debt": ["long_term_debt", "current_debt", "short_term_debt", "cash"],
+        "equity": ["equity"],
+        "debt_to_equity": ["long_term_debt", "current_debt", "short_term_debt", "equity"],
+        "current_ratio": ["current_assets", "current_liabilities"],
+        "quick_ratio": ["cash", "short_term_investments", "receivables", "current_liabilities"],
+        "cash_ratio": ["cash", "short_term_investments", "current_liabilities"],
+        "working_capital": ["current_assets", "current_liabilities"],
+        "cash_conversion": ["operating_cash_flow", "net_income"],
+    }
+
+    definitions = {
+        "cash": "Cash and cash equivalents; excludes investments.",
+        "total_debt": "Noncurrent long-term debt + current long-term debt + additional short-term borrowings; excludes leases. Complete compatible inputs required.",
+        "net_debt": "Debt excluding leases minus cash and cash equivalents.",
+        "equity": "Reported shareholders' equity.",
+        "debt_to_equity": "Debt excluding leases / positive shareholders' equity.",
+        "current_ratio": "Current assets / positive current liabilities.",
+        "quick_ratio": "(Cash + short-term investments + selected receivables) / positive current liabilities.",
+        "cash_ratio": "(Cash + short-term investments) / positive current liabilities.",
+        "working_capital": "Current assets minus current liabilities.",
+        "cash_conversion": "Operating cash flow / positive net income.",
+    }
+
+    def cell_note(metric, year):
+        key = metric_keys[metric]
+        period = period_ends[year]
+        lines = [f"{ticker}: period ended {period}", definitions[key]]
+
+        reason = metadata.get("unavailable_results", {}).get(year, {}).get(key)
+        if reason:
+            lines.append("Unavailable: " + reason)
+
+        inputs = list(dependencies[key])
+
+        if key == "quick_ratio":
+            basis = metadata.get("receivables_basis", {}).get(year, "")
+            if basis:
+                lines.append("Receivables basis: " + basis)
+            if basis == "Broader current receivables":
+                inputs = [
+                    "broader_current_receivables" if item == "receivables" else item
+                    for item in inputs
+                ]
+
+        if key in ("total_debt", "net_debt", "debt_to_equity"):
+            basis = metadata.get("debt_input_basis", {}).get(year, "")
+            if basis:
+                lines.append("Borrowing basis: " + basis)
+            if basis.startswith("Reconciled zero:"):
+                inputs = [
+                    "current_debt_total_including_finance_leases"
+                    if item == "short_term_debt" else item
+                    for item in inputs
+                ]
+            elif basis == "Commercial paper":
+                inputs = [
+                    "commercial_paper" if item == "short_term_debt" else item
+                    for item in inputs
+                ]
+
+        primary = metadata.get("period_checks", {}).get(period, {}).get("sources", {})
+
+        for item in dict.fromkeys(inputs):
+            source = primary.get(item)
+            origin = "SEC company facts"
+
+            if not source:
+                for section, label in (
+                    ("filing_sources", "SEC original filing"),
+                    ("reviewed_sources", "Reviewed SEC disclosure"),
+                    ("fmp_sources", "FMP"),
+                ):
+                    source = metadata.get(section, {}).get(year, {}).get(item)
+                    if source:
+                        origin = label
+                        break
+
+            if source:
+                field = (
+                    source.get("selected_concept")
+                    or source.get("concept")
+                    or source.get("field")
+                    or source.get("metric")
+                    or item
+                )
+                accession = source.get("accession", source.get("accn", ""))
+                line = f"{item}: {origin}; {field}"
+                if accession:
+                    line += f"; filing {accession}"
+                lines.append(line)
+            else:
+                lines.append(f"{item}: source details unavailable.")
+
+        lines.append("n.a. means unavailable or a nonpositive denominator, not zero.")
+        return "\n".join(lines)[:7000]
+
+
     with xlsxwriter.Workbook(excel_path) as workbook:
         overview = workbook.add_worksheet("Overview")
         sheet = workbook.add_worksheet("Financial History")
@@ -146,11 +259,17 @@ def build_report(csv_path, excel_path):
                         row_number, column, float(value), number_format
                     )
 
+                sheet.write_comment(
+                    row_number, column,
+                    cell_note(metric, record["Year"]),
+                    {"author": "Equity Analyst Lab"},
+                )
+
         note_row = len(metrics) + 6
 
         sheet.merge_range(
             note_row, 0, note_row + 1, last_column,
-            "Source: SEC company facts and accompanying company metadata. "
+            "Sources and calculation details are in cell notes and accompanying metadata. "
             "Debt excludes leases. Net debt subtracts cash and cash "
             "equivalents only. "
             + " ".join(metadata.get("notes", [])),
@@ -230,29 +349,11 @@ def build_report(csv_path, excel_path):
                 result_format,
                 cached_value
             )
-            metric_keys = {
-                "Debt excluding leases ($ billions)": "total_debt",
-                "Net debt excluding leases ($ billions)": "net_debt",
-                "Debt-to-equity excluding leases": "debt_to_equity",
-                "Current ratio": "current_ratio",
-                "Quick ratio": "quick_ratio",
-                "Cash ratio including short-term investments": "cash_ratio",
-            }
-
-            metric_key = metric_keys.get(metric)
-            explanation = (
-                metadata.get("unavailable_results", {})
-                .get(latest_year, {})
-                .get(metric_key)
+            overview.write_comment(
+                output_row, 2,
+                cell_note(metric, latest_year),
+                {"author": "Equity Analyst Lab"},
             )
-
-            if explanation:
-                overview.write_comment(
-                    output_row,
-                    2,
-                    explanation,
-                    {"author": "Equity Analyst Lab"},
-                )
         overview.write_url(
             "B17",
             "internal:'Financial History'!A1",

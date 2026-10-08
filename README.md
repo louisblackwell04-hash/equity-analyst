@@ -1,90 +1,92 @@
 # Equity Analyst Lab
 
-A hands-on financial-analysis project using public SEC data. Current support is Microsoft only. Version 2 is in progress: multi-company extraction and validation come before additional analyst benchmarks or valuation.
+A ticker-driven financial analysis tool using shared SEC field selection, original-filing extraction, optional FMP fallback, and formatted Excel reporting.
+
+## Scope
+
+Ticker lookup has no fixed company allowlist. The current model supports USD annual statements for US nonfinancial operating companies reporting under US GAAP.
+
+Banks, insurers, REITs, foreign-issuer reports and incompatible fiscal transitions require dedicated handling. Successful lookup does not guarantee complete metric coverage.
 
 ## Setup
 
-Use Python 3.10 or later (this baseline was checked with Python 3.14). From the repository folder:
+Tested with Python 3.14. From the repository folder:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
-```
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python3 -m pip install -r requirements.txt
 
-Create a local `.env` file with your SEC identification, for example:
+Create a local .env containing SEC_USER_AGENT with your name and email. Add FMP_API_KEY if using FMP. Never commit .env.
 
-```text
-SEC_USER_AGENT=Your Name your.email@example.com
-```
+## Run a ticker
 
-Never commit `.env`. Runtime dependencies are pinned to the versions installed during the baseline review. Tests use Python's standard library.
+    python3 src/sec_client.py --ticker NVDA --use-fmp
+    python3 src/excel_report.py --input output/NVDA/financial_summary.csv --output output/NVDA/financial_report.xlsx
 
-## Generate the report
+Replace NVDA with the desired SEC ticker. Omit --use-fmp to run without FMP.
 
-```bash
-python3 src/sec_client.py
-python3 src/excel_report.py
-open output/financial_report.xlsx
-```
+Outputs are stored under output/<TICKER>/: financial_summary.csv, financial_summary.metadata.json and financial_report.xlsx. Use matching ticker-specific paths for Excel generation. Close an open workbook before regenerating it.
 
-Close the Excel workbook without saving before regenerating it, to avoid viewing or saving over the new report with an older open copy. The first command downloads SEC data and prints the analysis; the second formats the generated CSV. Default output paths are relative to the project folder, regardless of the terminal's working directory.
+## Source order
 
-Terminal output includes growth, margins, free cash flow, debt, liquidity and cash conversion. The CSV and workbook retain the existing 11-column balance-sheet and cash-conversion summary; growth and profitability exports are planned, not yet delivered.
+1. SEC company facts and approved standard-concept alternatives.
+2. Original annual filings processed with Arelle.
+3. Optional documented, reviewed SEC inputs.
+4. Optional FMP fallback for cash and short-term investments.
 
-## Offline checks
+Existing values, including zero, are preserved. Missing fields are not automatically assigned zero. Filing facts are filtered by issuer, USD units, reporting date, annual duration and entity-wide context. Conflicting values and incompatible flow periods are rejected.
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+Custom-concept recognition currently supports a limited reviewed definition for combined physical and intangible asset purchases, together with a compatible investing cash-flow calculation relationship. Unknown custom meanings remain unresolved.
 
-This checks the saved 2018–2026 Microsoft baseline without network access, missing inputs, zero and negative values, growth gaps, selection rules, and import safety.
+Parsed filings are cached under output/.filing_cache/. Initial runs can take longer while filings and taxonomy definitions are downloaded.
 
-To reproduce the baseline manually:
+Metadata records source concepts, filing references, fallback inputs, extraction issues, calculation bases and unavailable-result explanations. Excel cell notes display source references and definitions.
 
-```bash
-python3 src/sec_client.py --facts-file tests/fixtures/msft_companyfacts_baseline.json --output output/baseline_check.csv
-cmp output/baseline_check.csv tests/fixtures/msft_v1_summary.csv
-```
+## Calculation rules
 
-A silent comparison means the files match. Live SEC facts may change, so the regression tests always use the saved fixture. Fixture provenance is in `tests/fixtures/README.md`.
+Debt excludes leases and requires compatible current, noncurrent and additional borrowing inputs. Commercial paper is not added again when included in total short-term borrowings. Equal aggregate current debt and current long-term debt can reconcile additional current debt to zero at reported precision; conflicting commercial-paper data prevents this reconciliation. Lease-inclusive debt remains separate when its lease component cannot be established.
 
-## Code structure
+Net debt subtracts cash and cash equivalents only.
 
-- `src/sec_client.py`: command-line entry point that connects the workflow.
-- `src/sec_data.py`: downloads, loads, and selects SEC records.
-- `src/company_config.py`: Microsoft concepts, fiscal year-end and documented exceptions.
-- `src/calculations.py`: shared numeric calculations, with no file or network operations.
-- `src/reporting.py`: formats the shared results for terminal and CSV.
-- `src/excel_report.py`: builds the existing Overview, history sheet and two charts.
+Calculated FCF uses property/equipment purchases or supported broader asset purchases. Its basis is disclosed and may differ from company-reported FCF. FCF growth requires matching spending bases.
 
-Each derived metric is calculated once per year. Terminal and CSV formatting use the same numeric results. Display values are rounded to two decimals only at export; the workbook currently reads those rounded values. Blank CSV results mean unavailable data or a nonpositive denominator, not zero. Terminal unavailable messages are now consistent across metrics.
+Liquidity calculations can use broader current receivables when customer receivables are unavailable, with the basis disclosed. Ratios require positive denominators. Growth requires the preceding calendar-year entry and a positive previous value.
 
-## Definitions and known limits
+Revenue prioritizes Revenues, then customer-contract revenue. Their scope can differ; source concepts must be considered when comparing companies and derived margins. Year labels use the calendar year of the actual fiscal period end.
 
-- Debt = noncurrent long-term debt + current portion + commercial paper; leases excluded.
-- Net debt subtracts cash and cash equivalents only, not short-term investments.
-- FCF = operating cash flow minus property/equipment purchases; this is not automatically FCFF or FCFE for valuation.
-- Current ratio = current assets / current liabilities.
-- Quick ratio = (cash + short-term investments + receivables) / current liabilities.
-- Cash ratio includes short-term investments.
-- Working capital = current assets minus current liabilities.
-- Cash conversion = operating cash flow / positive net income.
-- Flow selection retains the v1 10-K, fiscal-year matching and >300-day rules. Balance selection retains June 30 and the latest filed 10-K record. These are Microsoft-specific and may mix filing vintages; standardizing periods and restatements is Milestone 2.
-- Growth requires the preceding calendar-year entry and a positive previous value; gaps are not treated as one-year growth.
-- Microsoft commercial-paper zeros for 2020–2022 and 2026 are inherited manual assumptions. They are scoped to Microsoft and documented in configuration. They still need explicit revalidation in Milestone 3 and must not become a general missing=zero rule.
-- Matching the baseline is not independent verification of the financial statements.
+## Outputs and limitations
 
-Generated files are ignored for new Git additions. The previously tracked `output/financial_summary.csv` remains tracked; it has not been removed or overwritten by the refactor verification. Commit source changes explicitly. Excel lock files and Python caches should not be committed.
+Terminal output includes growth, margins, FCF, debt, liquidity and cash conversion. CSV and Excel retain the existing 11-column balance-sheet and cash-conversion summary. Broader exports and valuation are later milestones.
 
-## Approved Version 2 milestones
+Display values are rounded to two decimals; Excel reads the rounded CSV. Blank CSV cells and Excel n.a. mean unavailable data or a nonpositive denominator, not zero. Charts preserve missing-value gaps.
 
-1. Establish a stable baseline; separate retrieval, calculations and reporting; preserve results.
-2. Ticker selection, fiscal-year handling and multi-company extraction. Test Microsoft, Apple and Walmart.
-3. Reconcile the latest two years against filings and record sources and exceptions.
-4. Add 3/5-year growth, cash conversion, capital spending intensity, dilution, ROIC and interest coverage.
-5. Agree on a market-data provider; add dated valuation measures and selected-peer comparisons.
-6. Complete Overview, Financial History, Peer Comparison, and Sources & Definitions sheets.
-7. Test fresh setup, invalid inputs and missing data; document and release Version 2.
+Some companies and historical years still have unresolved inputs. Some older primary HTML filings yield no eligible facts, although later comparative disclosures can recover values. Generic legacy XML-instance discovery is not implemented. FMP fallback currently covers cash and investments only; subscription limits apply.
 
-Initial scope: US nonfinancial operating companies under US GAAP. Banks, insurers, REITs and foreign filers need dedicated handling. DCF scenarios, automated buy/sell ratings, portfolio management and a web app are outside this release. No trading or brokerage actions are performed.
+Passing tests and pipeline checks is not independent verification of every financial value. That reconciliation belongs to Milestone 3.
+
+## Tests and legacy baseline
+
+    python3 -m unittest discover -s tests -v
+
+The offline suite covers periods, source distinctions, preservation of existing values, custom spending, debt reconciliation and calculations.
+
+The original regression baseline remains available:
+
+    python3 src/sec_client.py --facts-file tests/fixtures/msft_companyfacts_baseline.json --output output/baseline_check.csv
+    cmp output/baseline_check.csv tests/fixtures/msft_v1_summary.csv
+
+The baseline includes inherited manual assumptions. Live selection uses standard_concepts.py and universal_selection.py. Older configuration profiles remain for legacy and reference-validation paths.
+
+Generated outputs and caches are ignored. The previously tracked root output CSV remains outside source checkpoints.
+
+## Milestones
+
+1. Stable baseline and separated modules.
+2. Ticker-independent selection, fiscal dates and source fallbacks.
+3. Independent filing reconciliation and coverage validation.
+4. Analyst benchmarks and longer-term growth.
+5. Dated valuation data and peer comparisons.
+6. Complete analyst workbook and source navigation.
+7. Fresh-setup verification and release.
+
+Dedicated financial-sector, REIT and foreign-issuer models are future coverage work. Automated investment recommendations and trading actions are outside the current release.
